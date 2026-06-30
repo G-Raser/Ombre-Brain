@@ -28,6 +28,7 @@ from typing import Optional
 
 from .. import _runtime as rt
 from .._common import check_content_size, check_pinned_quota
+from ..review_gate import create_pending_candidate, pending_response, review_mode_enabled
 
 
 async def trace_core(
@@ -71,12 +72,104 @@ async def trace_core(
 
     # --- Delete 模式（F-10：软删除，移入 archive/ + 标 deleted_at）---
     if delete:
+        if review_mode_enabled("intercept_trace_high_impact"):
+            candidate = await create_pending_candidate(
+                original_tool="trace",
+                suggested_type="delete",
+                title=f"删除请求 {bucket_id}",
+                content=(
+                    f"目标 bucket_id：{bucket_id}\n\n"
+                    "计划操作：delete=True，将正式桶移入档案/删除召回入口。"
+                ),
+                suggested_importance=5,
+                tags=["trace", "delete"],
+                original_arguments={"bucket_id": bucket_id, "delete": True},
+                reason="review mode 已开启，trace delete 属于高影响操作，等待主人确认。",
+                notes="delete/update 类候选必须 explicitly_approved=true 才能正式执行。",
+                target_bucket_id=bucket_id,
+                planned_updates={"delete": True},
+            )
+            return pending_response(candidate) + "\n修改请求已进入待审核区，未修改正式记忆。"
         success = await rt.bucket_mgr.delete(bucket_id)
         return f"已将记忆桶存入档案（不可在日常召回中浮现）: {bucket_id}" if success else f"未找到记忆桶: {bucket_id}"
 
     bucket = await rt.bucket_mgr.get(bucket_id)
     if not bucket:
         return f"未找到记忆桶: {bucket_id}"
+
+    if review_mode_enabled("intercept_trace_high_impact"):
+        planned_updates: dict = {}
+        if name:
+            planned_updates["name"] = name
+        if domain:
+            planned_updates["domain"] = [d.strip() for d in domain.split(",") if d.strip()]
+        if 0 <= valence <= 1:
+            planned_updates["valence"] = valence
+        if 0 <= arousal <= 1:
+            planned_updates["arousal"] = arousal
+        if 1 <= importance <= 10:
+            planned_updates["importance"] = importance
+        if tags:
+            planned_updates["tags"] = [t.strip() for t in tags.split(",") if t.strip()]
+        if resolved in (0, 1):
+            planned_updates["resolved"] = bool(resolved)
+        if pinned in (0, 1):
+            planned_updates["pinned"] = bool(pinned)
+            if pinned == 1:
+                planned_updates["importance"] = 10
+        if digested in (0, 1):
+            planned_updates["digested"] = bool(digested)
+        if content:
+            size_err = check_content_size(content)
+            if size_err:
+                return size_err
+            planned_updates["content"] = content
+        if status:
+            s = status.strip().lower()
+            if s in ("active", "resolved", "abandoned"):
+                planned_updates["status"] = s
+        if 0 <= weight <= 1:
+            planned_updates["weight"] = float(weight)
+        if dont_surface in (0, 1):
+            planned_updates["dont_surface"] = bool(dont_surface)
+        why_remembered = str(why_remembered).strip()
+        if why_remembered == "\\clear":
+            planned_updates["why_remembered"] = ""
+        elif why_remembered:
+            planned_updates["why_remembered"] = why_remembered[:500]
+        if planned_updates:
+            meta = bucket.get("metadata", {})
+            original_summary = {
+                k: meta.get(k)
+                for k in planned_updates
+                if k != "content"
+            }
+            if "content" in planned_updates:
+                original_summary["content_len"] = len(bucket.get("content") or "")
+                planned_updates["content_len"] = len(content or "")
+                planned_updates.pop("content_len", None)
+            candidate = await create_pending_candidate(
+                original_tool="trace",
+                suggested_type="update",
+                title=f"修改请求 {bucket_id}",
+                content=(
+                    f"目标 bucket_id：{bucket_id}\n\n"
+                    f"原字段摘要：{original_summary}\n\n"
+                    "计划修改字段见下方。"
+                ),
+                suggested_importance=5,
+                tags=["trace", "update"],
+                original_arguments={
+                    "bucket_id": bucket_id,
+                    "fields": sorted(planned_updates.keys()),
+                    "content_len": len(content or ""),
+                },
+                reason="review mode 已开启，trace 修改高影响字段，等待主人确认。",
+                notes="delete/update 类候选必须 explicitly_approved=true 才能正式执行。",
+                target_bucket_id=bucket_id,
+                planned_updates=planned_updates,
+            )
+            return pending_response(candidate) + "\n修改请求已进入待审核区，未修改正式记忆。"
 
     meta = bucket.get("metadata", {})
     if 1 <= importance <= 10 and (meta.get("pinned") or meta.get("protected")):

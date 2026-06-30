@@ -25,6 +25,7 @@ from typing import Optional
 
 from .. import _runtime as rt
 from .._common import check_content_size, enforce_high_importance_quota, enforce_pinned_quota
+from ..review_gate import create_pending_candidate, pending_response, review_mode_enabled
 from .feel import store_feel
 from .pinned import store_pinned
 from .core import store_core
@@ -100,6 +101,45 @@ async def dispatch(
         extra_tags = [str(t).strip() for t in tags if t]
     else:
         extra_tags = [t.strip() for t in str(tags).split(",") if t.strip()]
+
+    if review_mode_enabled("intercept_hold"):
+        if feel and review_mode_enabled("intercept_feel"):
+            suggested_type = "feel"
+            original_tool = "feel"
+            suggested_importance = 5
+            title = "feel 候选"
+        elif pinned:
+            suggested_type = "pinned"
+            original_tool = "hold"
+            suggested_importance = 10
+            title = "pinned 候选"
+        else:
+            suggested_type = "bucket"
+            original_tool = "hold"
+            suggested_importance = importance
+            title = "hold 候选"
+        candidate = await create_pending_candidate(
+            original_tool=original_tool,
+            suggested_type=suggested_type,
+            title=title,
+            content=content.strip(),
+            suggested_importance=suggested_importance,
+            tags=extra_tags,
+            original_arguments={
+                "content_len": len(content or ""),
+                "tags": extra_tags,
+                "importance": importance,
+                "pinned": pinned,
+                "feel": feel,
+                "source_bucket": source_bucket,
+                "valence": valence,
+                "arousal": arousal,
+                "why_len": len(why_remembered or ""),
+            },
+            reason="review mode 已开启，hold 写入默认进入 pending，主人确认后才可进入正式 buckets。",
+            notes="I / feel / pinned 不允许自动批准。" if suggested_type in {"feel", "pinned"} else "",
+        )
+        return pending_response(candidate)
 
     # 所有越界/配额提醒走统一 warnings channel；server.py _with_notice 末尾自动追加。
     # 这里返回值只承载业务正文。

@@ -68,6 +68,7 @@ from tools import anchor as _t_anchor
 from tools import plan as _t_plan
 from tools import dream as _t_dream
 from tools import i as _t_i
+from tools import review_gate as _t_review_gate
 from tools._common import (
     check_content_size as _check_content_size,
     check_pinned_quota as _check_pinned_quota,
@@ -769,6 +770,68 @@ async def I(
         _t_i.dispatch(content=content, aspect=aspect, read=read, limit=limit),
         op="I",
         args={"content_len": len(content or ""), "aspect": aspect, "read": read, "limit": limit},
+    )
+
+
+@mcp_extra.tool()
+async def list_pending_memories(limit: Optional[int] = 50) -> str:
+    """列出 memory_review/pending 中的待审核候选。只读 pending，不修改正式记忆库。"""
+    return await _with_notice(
+        _t_review_gate.list_pending_memories(limit=limit or 50),
+        op="list_pending_memories",
+        args={"limit": limit},
+    )
+
+
+@mcp_extra.tool()
+async def read_pending_memory(candidate_id: str) -> str:
+    """读取一条 pending 候选的完整 Markdown 内容。只读 pending，不修改正式记忆库。"""
+    return await _with_notice(
+        _t_review_gate.read_pending_memory(candidate_id),
+        op="read_pending_memory",
+        args={"candidate_id": candidate_id},
+    )
+
+
+@mcp_extra.tool()
+async def update_pending_memory(
+    candidate_id: str,
+    updates_json: Optional[str] = "",
+    body: Optional[str] = "",
+) -> str:
+    """修改一条 pending 候选。updates_json 为 JSON object，可设置 explicitly_approved 等 frontmatter 字段；body 可替换正文。"""
+    return await _with_notice(
+        _t_review_gate.update_pending_memory(
+            candidate_id=candidate_id,
+            updates_json=updates_json or "",
+            body=body or "",
+        ),
+        op="update_pending_memory",
+        args={
+            "candidate_id": candidate_id,
+            "updates_len": len(updates_json or ""),
+            "body_len": len(body or ""),
+        },
+    )
+
+
+@mcp_extra.tool()
+async def reject_pending_memory(candidate_id: str, reason: Optional[str] = "") -> str:
+    """拒绝一条 pending 候选，将其移动到 memory_review/rejected。不会修改正式记忆库。"""
+    return await _with_notice(
+        _t_review_gate.reject_pending_memory(candidate_id, reason or ""),
+        op="reject_pending_memory",
+        args={"candidate_id": candidate_id, "reason_len": len(reason or "")},
+    )
+
+
+@mcp_extra.tool()
+async def approve_pending_memory(candidate_id: str, dry_run: Optional[bool] = True) -> str:
+    """批准单条 pending 候选。默认 dry_run=True 只报告将执行什么；dry_run=False 且满足审批条件时才写入正式 buckets。"""
+    return await _with_notice(
+        _t_review_gate.approve_pending_memory(candidate_id, dry_run=True if dry_run is None else dry_run),
+        op="approve_pending_memory",
+        args={"candidate_id": candidate_id, "dry_run": dry_run},
     )
 
 

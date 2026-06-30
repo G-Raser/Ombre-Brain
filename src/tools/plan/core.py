@@ -27,6 +27,7 @@ breath 中。
 from typing import Optional
 
 from .. import _runtime as rt
+from ..review_gate import create_pending_candidate, pending_response, review_mode_enabled
 from utils import strip_wikilinks, get_ai_name
 
 
@@ -49,6 +50,26 @@ async def plan_create(
     status = status.strip().lower()
     if status not in ("active", "resolved", "abandoned"):
         status = "active"
+
+    if review_mode_enabled("intercept_plan"):
+        candidate = await create_pending_candidate(
+            original_tool="plan",
+            suggested_type="plan",
+            title="plan 候选",
+            content=content.strip(),
+            suggested_importance=7,
+            tags=["__plan__"],
+            original_arguments={
+                "content_len": len(content or ""),
+                "status": status,
+                "related_bucket": related_bucket,
+                "weight": weight,
+                "why_len": len(why_remembered or ""),
+            },
+            reason="review mode 已开启，plan 写入默认进入 pending，主人确认后才可进入正式 buckets。",
+            notes="plan 是待办/承诺类候选，本次未写入正式计划桶。",
+        )
+        return pending_response(candidate)
 
     norm = content.strip()
     try:
@@ -123,6 +144,27 @@ async def letter_write(
         a = ai
     else:
         a = raw
+
+    if review_mode_enabled("intercept_letter"):
+        candidate = await create_pending_candidate(
+            original_tool="letter_write",
+            suggested_type="letter",
+            title=(title.strip()[:60] or f"{a}_{date.strip() or 'letter'}"),
+            content=content.strip(),
+            suggested_importance=10,
+            tags=["__letter__"],
+            original_arguments={
+                "author": a,
+                "content_len": len(content or ""),
+                "user_name": user_name,
+                "title": title,
+                "date": date,
+                "ai_name": ai,
+            },
+            reason="review mode 已开启，letter_write 默认进入 pending，主人确认后才可进入正式 letters。",
+            notes="letter 需保留原文质感，高重要度候选必须 explicitly_approved=true。",
+        )
+        return pending_response(candidate)
 
     extra_meta = {"author": a}
     if user_name.strip():

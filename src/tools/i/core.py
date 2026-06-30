@@ -23,6 +23,7 @@ I 是 OB 的自我感知层：AI 把关于自己的观察写下来（本质/规�
 from typing import Optional
 
 from .. import _runtime as rt
+from ..review_gate import create_pending_candidate, pending_response, review_mode_enabled
 
 _VALID_ASPECTS = {"nature", "values", "patterns", "limits", "becoming", "uncertainty", "stance"}
 
@@ -45,6 +46,27 @@ async def i_core(
 
     if read or not content.strip():
         return await _read_i(int(limit))
+    if review_mode_enabled("intercept_i"):
+        tags = ["__i__"]
+        if aspect.strip():
+            tags.append(f"aspect:{aspect.strip()}")
+        candidate = await create_pending_candidate(
+            original_tool="I",
+            suggested_type="I",
+            title="I 候选",
+            content=content.strip(),
+            suggested_importance=6,
+            tags=tags,
+            original_arguments={
+                "content_len": len(content or ""),
+                "aspect": aspect,
+                "read": read,
+                "limit": limit,
+            },
+            reason="review mode 已开启，I 写入是自我认知类高影响候选，必须等待 CC 酱或猫茶确认。",
+            notes="I 不允许自动批准，必须 explicitly_approved=true 后才能正式入库。",
+        )
+        return pending_response(candidate)
     return await _write_i(content.strip(), aspect.strip())
 
 

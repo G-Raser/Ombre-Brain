@@ -20,6 +20,7 @@ grow 是「我把一段长内容整理进记忆」。短内容（<30 字）走 s
 """
 
 from .. import _runtime as rt
+from ..review_gate import create_pending_candidate, pending_response, review_mode_enabled
 from .shortpath import grow_shortpath
 from .core import grow_core
 
@@ -30,6 +31,24 @@ async def dispatch(content: str) -> str:
     if not content or not content.strip():
         return "内容为空，无法整理。"
 
-    if len(content.strip()) < 30:
+    stripped = content.strip()
+    if review_mode_enabled("intercept_grow"):
+        candidate = await create_pending_candidate(
+            original_tool="grow",
+            suggested_type="bucket",
+            title="grow 候选",
+            content=stripped,
+            suggested_importance=6,
+            tags=[],
+            original_arguments={"content_len": len(stripped)},
+            reason=(
+                "review mode 已开启，grow 暂以整段内容生成单条 pending 候选；"
+                "后续可升级为 grow-to-multiple-candidates。"
+            ),
+            notes="本次未调用 digest，未拆分，未写入正式 buckets。",
+        )
+        return f"候选数量：1\ncandidate_ids：{candidate['candidate_id']}\n" + pending_response(candidate)
+
+    if len(stripped) < 30:
         return await grow_shortpath(content)
     return await grow_core(content)

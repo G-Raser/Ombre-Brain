@@ -29,11 +29,27 @@ pulse 顺带放在这里：它是系统状态 + 桶清单的总览，调用频�
 from typing import Optional
 
 from .. import _runtime as rt
+from ..review_gate import create_pending_candidate, pending_response, review_mode_enabled
 
 
 async def anchor_set(bucket_id: str) -> str:
     if rt.mark_op:
         rt.mark_op("anchor")
+    if review_mode_enabled("intercept_anchor"):
+        candidate = await create_pending_candidate(
+            original_tool="anchor",
+            suggested_type="anchor",
+            title=f"anchor 请求 {bucket_id}",
+            content=f"目标 bucket_id：{bucket_id}\n\n计划操作：anchor=True。",
+            suggested_importance=9,
+            tags=["anchor", "review"],
+            original_arguments={"bucket_id": bucket_id, "anchor": True},
+            reason="review mode 已开启，anchor 会影响长期关系坐标，等待主人确认。",
+            notes="anchor 候选必须 explicitly_approved=true 才能正式执行。",
+            target_bucket_id=bucket_id,
+            planned_updates={"anchor": True, "source_tool": "anchor"},
+        )
+        return pending_response(candidate) + "\nanchor 请求已进入待审核区，未修改正式记忆。"
     result = await rt.bucket_mgr.set_anchor(bucket_id, True)
     if not result["ok"]:
         return f"我没能把它锚住。{result.get('error', '未知错误')} 当前 anchor: {result.get('count', '?')}/{result.get('limit', 24)}。"
@@ -45,6 +61,21 @@ async def anchor_set(bucket_id: str) -> str:
 async def anchor_release(bucket_id: str) -> str:
     if rt.mark_op:
         rt.mark_op("release")
+    if review_mode_enabled("intercept_anchor"):
+        candidate = await create_pending_candidate(
+            original_tool="release",
+            suggested_type="anchor",
+            title=f"release 请求 {bucket_id}",
+            content=f"目标 bucket_id：{bucket_id}\n\n计划操作：anchor=False。",
+            suggested_importance=9,
+            tags=["anchor", "release", "review"],
+            original_arguments={"bucket_id": bucket_id, "anchor": False},
+            reason="review mode 已开启，release 会影响长期关系坐标，等待主人确认。",
+            notes="anchor 候选必须 explicitly_approved=true 才能正式执行。",
+            target_bucket_id=bucket_id,
+            planned_updates={"anchor": False},
+        )
+        return pending_response(candidate) + "\nrelease 请求已进入待审核区，未修改正式记忆。"
     result = await rt.bucket_mgr.set_anchor(bucket_id, False)
     if not result["ok"]:
         return f"释放失败。{result.get('error', '未知错误')}"
