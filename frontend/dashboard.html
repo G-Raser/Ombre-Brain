@@ -1724,6 +1724,380 @@
     transition: opacity 0.3s;
   }
   .self-overlay.show { opacity: 1; pointer-events: auto; }
+
+  .review-area-tabs,
+  .review-card-actions,
+  .review-detail-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .review-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    background: var(--surface);
+    box-shadow: inset 1px 1px 0 rgba(255,255,255,0.35);
+  }
+  .review-card-inner {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+  .review-card-main {
+    min-width: 0;
+    flex: 1;
+  }
+  .review-pill-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .review-id {
+    font-size: 11px;
+    color: var(--accent);
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .review-meta-pill {
+    font-size: 11px;
+    color: var(--text-dim);
+    overflow-wrap: anywhere;
+  }
+  .review-card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .review-card-grid,
+  .review-detail-summary-grid,
+  .review-source-grid,
+  .review-raw-grid {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    gap: 6px 10px;
+    font-size: 12px;
+    line-height: 1.7;
+  }
+  .review-card-grid {
+    grid-template-columns: 130px minmax(0, 1fr);
+    color: var(--text-dim);
+  }
+  .review-field-key {
+    color: var(--text-dim);
+  }
+  .review-card-grid .review-detail-field,
+  .review-detail-summary-grid .review-detail-field,
+  .review-source-grid .review-detail-field,
+  .review-raw-grid .review-detail-field {
+    display: contents;
+  }
+  .review-field-value {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .review-card-summary {
+    display: -webkit-box;
+    -webkit-line-clamp: 5;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.7;
+    margin-top: 8px;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+  }
+  .review-card-actions {
+    justify-content: flex-end;
+    min-width: 220px;
+  }
+  .review-detail-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+  }
+  .review-detail-section {
+    min-width: 0;
+  }
+  .review-detail-section h4 {
+    margin: 0 0 8px;
+    color: var(--text);
+    line-height: 1.3;
+  }
+  .review-body-pre {
+    width: 100%;
+    box-sizing: border-box;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: normal;
+    background: var(--surface-solid);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    max-height: 420px;
+    overflow: auto;
+    font-size: 13px;
+    line-height: 1.75;
+  }
+  .review-raw-details {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: var(--surface-solid);
+  }
+  .review-raw-details summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-size: 12px;
+    user-select: none;
+  }
+  .review-raw-grid {
+    margin-top: 10px;
+  }
+  .review-detail-actions {
+    justify-content: flex-end;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+  }
+
+  @media (max-width: 768px) {
+    html, body {
+      overflow-x: hidden;
+    }
+
+    .header {
+      padding: 12px;
+      gap: 8px;
+    }
+    .header h1 {
+      flex: 1 1 100%;
+    }
+    .header-meta,
+    .header-actions,
+    .search-bar {
+      width: 100%;
+    }
+    .header-actions {
+      overflow-x: auto;
+      padding-bottom: 4px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .tabs {
+      margin: 8px 0;
+      padding: 8px 12px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      flex-wrap: nowrap !important;
+      justify-content: flex-start;
+      scroll-snap-type: x proximity;
+      -webkit-overflow-scrolling: touch;
+    }
+    .tab {
+      flex: 0 0 auto !important;
+      min-width: 96px;
+      max-width: none !important;
+      padding: 10px 14px 8px;
+      scroll-snap-align: start;
+      touch-action: manipulation;
+    }
+
+    .content {
+      padding: 14px 10px;
+      overflow-x: hidden;
+    }
+    .bucket-row,
+    .config-section,
+    .sub-card,
+    .breath-info,
+    .breath-flow,
+    .stat-card,
+    .plan-card,
+    .letter-card,
+    .anchor-card,
+    .review-card {
+      max-width: 100%;
+      overflow-wrap: anywhere;
+    }
+    #review-view .config-section {
+      padding: 14px 12px;
+    }
+    #review-detail-panel {
+      width: calc(100vw - 24px);
+      max-width: calc(100vw - 24px);
+      margin-left: auto;
+      margin-right: auto;
+      box-sizing: border-box;
+      overflow: visible;
+    }
+    #review-detail {
+      font-size: 14px !important;
+      line-height: 1.75 !important;
+      width: 100%;
+      min-width: 0;
+    }
+    .review-area-tabs {
+      overflow-x: auto;
+      flex-wrap: nowrap;
+      padding-bottom: 4px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .review-area-tabs button {
+      flex: 0 0 auto;
+    }
+    .review-card {
+      padding: 12px;
+    }
+    .review-card-inner,
+    .review-card-main,
+    .review-card-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      width: 100%;
+      min-width: 0;
+    }
+    .review-card-grid,
+    .review-detail-summary-grid,
+    .review-source-grid,
+    .review-raw-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .review-card-grid .review-detail-field,
+    .review-detail-summary-grid .review-detail-field,
+    .review-source-grid .review-detail-field,
+    .review-raw-grid .review-detail-field,
+    .review-detail-field {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .review-field-key {
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .review-field-value {
+      font-size: 14px;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .review-card-summary {
+      -webkit-line-clamp: 4;
+      font-size: 13px;
+      line-height: 1.65;
+      overflow-wrap: break-word;
+    }
+    .review-detail-section h4 {
+      font-size: 15px;
+      line-height: 1.35;
+      white-space: normal;
+    }
+    .review-body-pre {
+      width: 100%;
+      max-height: 48vh;
+      font-size: 15px;
+      line-height: 1.75;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+      word-break: normal;
+    }
+    .review-raw-details {
+      padding: 10px;
+    }
+    .review-detail-actions {
+      position: static;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .review-detail-actions button,
+    .review-card-actions button {
+      width: 100%;
+      min-height: 44px;
+      justify-content: center;
+    }
+    .review-danger-action {
+      margin-top: 8px;
+    }
+    .bucket-row-top,
+    .bucket-row-bottom,
+    .detail-actions,
+    .review-actions,
+    .review-tabs,
+    .breath-controls,
+    .form-row,
+    .config-row {
+      flex-wrap: wrap;
+    }
+    .form-row,
+    .config-row {
+      align-items: stretch !important;
+    }
+    .form-row label,
+    .config-row label {
+      width: 100%;
+    }
+
+    input,
+    select,
+    textarea,
+    button {
+      max-width: 100%;
+    }
+    button,
+    .btn-primary,
+    .btn-secondary,
+    .btn-danger,
+    .icon-btn,
+    .filter-btn {
+      min-height: 42px;
+      touch-action: manipulation;
+    }
+
+    .detail-panel {
+      width: calc(100vw - 16px);
+      right: 8px;
+      top: 8px;
+      height: calc(100vh - 16px);
+      overflow-y: auto;
+    }
+    .detail-content,
+    #review-detail,
+    #review-detail pre,
+    pre,
+    code {
+      max-width: 100%;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    table {
+      display: block;
+      max-width: 100%;
+      overflow-x: auto;
+    }
+    canvas,
+    svg {
+      max-width: 100%;
+    }
+  }
 </style>
 </head>
 <body>
@@ -1987,6 +2361,11 @@
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
         <h3 style="margin:0;">审核 / Review</h3>
         <button class="btn-secondary" onclick="loadReviewQueue()" title="刷新审核队列" style="padding:8px 14px;font-size:12px;display:inline-flex;align-items:center;gap:5px;"><i data-lucide="refresh-cw"></i> 刷新</button>
+      </div>
+      <div class="review-area-tabs" style="margin-bottom:12px;">
+        <button id="review-tab-pending" class="btn-secondary" onclick="setReviewArea('pending')" title="待审核候选" style="padding:7px 12px;font-size:12px;">Pending / 待审核</button>
+        <button id="review-tab-approved" class="btn-secondary" onclick="setReviewArea('approved')" title="已批准候选" style="padding:7px 12px;font-size:12px;">Approved / 已批准</button>
+        <button id="review-tab-rejected" class="btn-secondary" onclick="setReviewArea('rejected')" title="已拒绝候选" style="padding:7px 12px;font-size:12px;">Rejected / 已拒绝</button>
       </div>
       <div id="review-meta" style="font-size:12px;color:var(--text-dim);min-height:18px;margin-bottom:10px;"></div>
       <div id="review-list" style="display:flex;flex-direction:column;gap:10px;">
@@ -2326,7 +2705,7 @@
             <li>点击 <b>Create a tunnel</b> → 选 <b>Cloudflared</b> → 给 Tunnel 起个名字</li>
             <li>在 "Install connector" 页面，选 <b>Docker</b>，复制命令里 <code>--token</code> 后面那一长串字符（以 <code>eyJ</code> 开头）</li>
             <li>把这串 Token 粘贴到下面输入框，点保存 → 启动</li>
-            <li>回到 Cloudflare，添加 Public Hostname：Domain 填你的域名，Service 填 <code>http://localhost:8000</code>（容器内端口）</li>
+            <li>回到 Cloudflare，添加 Public Hostname：Domain 填你的域名，Service 填容器内服务地址（例如 Docker 网络内的 8000 端口）</li>
           </ol>
         </details>
 
@@ -3804,7 +4183,7 @@ async function readJsonSafe(resp) {
 
 // ========================================
 
-const BASE = location.origin;
+const BASE = '';
 let allBuckets = [];
 let currentFilter = 'all';
 
@@ -4078,6 +4457,7 @@ async function showDetail(id) {
 }
 
 async function bucketPin(id) {
+  if (!confirm('这会切换 pinned / 钉选状态，确定继续吗？')) return;
   try {
     var res = await fetch(BASE + '/api/bucket/' + id + '/pin', { method: 'POST' });
     if (!res.ok) throw new Error(await res.text());
@@ -4088,6 +4468,7 @@ async function bucketPin(id) {
 
 // iter 2.0: anchor 切换 / anchor toggle
 async function bucketAnchor(id) {
+  if (!confirm('这会切换 anchor / 锚点状态，确定继续吗？')) return;
   var body = await toggleAnchor(id);  // toggle = no value
   if (body && body.ok) {
     await showDetail(id);
@@ -4782,6 +5163,7 @@ function esc(s) {
 
 var reviewCandidates = [];
 var reviewSelectedId = '';
+var reviewArea = 'pending';
 var REVIEW_HIGH_IMPACT_TYPES = ['I', 'feel', 'anchor', 'pinned', 'update', 'delete'];
 
 function reviewTags(tags) {
@@ -4800,24 +5182,62 @@ function reviewValue(v) {
   return esc(String(v));
 }
 
+function reviewField(label, valueHtml) {
+  return '<div class="review-detail-field">' +
+    '<div class="review-field-key">' + esc(label) + '</div>' +
+    '<div class="review-field-value">' + valueHtml + '</div>' +
+    '</div>';
+}
+
+function reviewFieldValue(candidate, fm, key) {
+  return Object.prototype.hasOwnProperty.call(candidate, key) ? candidate[key] : fm[key];
+}
+
+function reviewAreaLabel(area) {
+  if (area === 'approved') return '已批准候选';
+  if (area === 'rejected') return '已拒绝候选';
+  return '待审核候选';
+}
+
+function setReviewArea(area) {
+  if (['pending', 'approved', 'rejected'].indexOf(area) < 0) area = 'pending';
+  reviewArea = area;
+  clearReviewDetail();
+  loadReviewQueue();
+}
+
+function updateReviewAreaButtons() {
+  ['pending', 'approved', 'rejected'].forEach(function(area) {
+    var el = document.getElementById('review-tab-' + area);
+    if (!el) return;
+    el.style.boxShadow = area === reviewArea ? 'inset 2px 2px 5px var(--shadow-dark-subtle), inset -2px -2px 5px var(--shadow-light)' : '';
+    el.style.color = area === reviewArea ? 'var(--accent)' : '';
+  });
+}
+
 async function loadReviewQueue() {
   var list = document.getElementById('review-list');
   var meta = document.getElementById('review-meta');
   if (!list || !meta) return;
+  updateReviewAreaButtons();
   meta.textContent = '加载中…';
   list.innerHTML = '<div class="loading">加载中…</div>';
   try {
-    var resp = await authFetch('/api/review/pending?limit=200');
+    var resp = await authFetch('/api/review/' + encodeURIComponent(reviewArea) + '?limit=200');
     if (!resp) return;
     var data = await readJsonSafe(resp);
     if (!data.ok) throw new Error(data.error || '读取失败');
     reviewCandidates = data.candidates || [];
-    meta.textContent = '待审核候选：' + reviewCandidates.length + ' 条';
+    meta.textContent = reviewAreaLabel(reviewArea) + '：' + reviewCandidates.length + ' 条';
     if (!reviewCandidates.length) {
+      var emptyTitle = reviewArea === 'pending' ? '暂无待审核记忆。' : (reviewArea === 'approved' ? '暂无已批准候选。' : '暂无已拒绝候选。');
+      var emptyText = reviewArea === 'pending'
+        ? '新的 hold / grow / trace 写入会先进入这里，等待主人确认。'
+        : (reviewArea === 'approved' ? '批准后的候选会保留在这里，便于回看。' : '拒绝不会删除候选；被拒绝的候选会保留在这里，也可以恢复到待审核。');
       list.innerHTML =
         '<div style="padding:28px 18px;text-align:center;color:var(--text-dim);font-size:13px;line-height:1.8;border:1px solid var(--border);border-radius:8px;background:var(--surface);">' +
-        '<div style="font-weight:600;color:var(--text);margin-bottom:4px;">暂无待审核记忆。</div>' +
-        '<div>新的 hold / grow / trace 写入会先进入这里，等待主人确认。</div>' +
+        '<div style="font-weight:600;color:var(--text);margin-bottom:4px;">' + esc(emptyTitle) + '</div>' +
+        '<div>' + esc(emptyText) + '</div>' +
         '</div>';
       clearReviewDetail();
       return;
@@ -4831,38 +5251,57 @@ async function loadReviewQueue() {
 }
 
 function renderReviewCandidate(item) {
-  var id = item.candidate_id || '';
-  var idArg = JSON.stringify(id).replace(/"/g, '&quot;');
+  var key = item.candidate_key || item.candidate_id || '';
+  var id = item.candidate_id || key;
+  var keyArg = JSON.stringify(key).replace(/"/g, '&quot;');
   var high = reviewIsHighImpact(item);
-  var approved = !!item.explicitly_approved;
-  var formalDisabled = high && !approved;
-  var warn = high
-    ? '<div style="margin-top:8px;padding:8px 10px;border:1px solid rgba(184,60,60,0.45);background:rgba(184,60,60,0.08);color:var(--negative);font-size:12px;line-height:1.5;">高影响类型：默认只允许 dry-run。explicitly_approved 不是 true 时不能正式批准。</div>'
+  var mismatch = item.candidate_id_mismatch
+    ? '<span style="font-size:11px;color:var(--negative);">id/file mismatch</span>'
     : '';
+  var warn = high
+    ? '<div style="margin-top:8px;padding:8px 10px;border:1px solid rgba(184,60,60,0.45);background:rgba(184,60,60,0.08);color:var(--negative);font-size:12px;line-height:1.5;">高影响类型：请先 dry-run 核对。正式批准会二次确认，并由后端记录 explicitly_approved=true。</div>'
+    : '';
+  var lifecycleRows = '';
+  if (reviewArea === 'rejected') {
+    lifecycleRows =
+      reviewField('rejected_at', reviewValue(item.rejected_at)) +
+      reviewField('rejection_reason', reviewValue(item.rejection_reason));
+  } else if (reviewArea === 'approved') {
+    lifecycleRows =
+      reviewField('approved_at', reviewValue(item.approved_at));
+  }
+  var actions = '<button onclick="loadReviewDetail(' + keyArg + ')" title="查看详情" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="eye"></i> 查看详情</button>';
+  if (reviewArea === 'pending') {
+    actions +=
+      '<button onclick="rejectReviewCandidate(' + keyArg + ')" title="拒绝" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="x-circle"></i> 拒绝</button>' +
+      '<button class="btn-secondary" onclick="approveReviewCandidate(' + keyArg + ', true)" title="Dry-run 批准" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="scan-line"></i> Dry-run 批准</button>' +
+      '<button class="btn-danger review-danger-action" onclick="approveReviewCandidate(' + keyArg + ', false)" title="正式批准" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="check-circle"></i> 正式批准</button>';
+  } else if (reviewArea === 'rejected') {
+    actions += '<button class="btn-secondary" onclick="restoreRejectedCandidate(' + keyArg + ')" title="恢复到待审核" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="rotate-ccw"></i> 恢复到待审核</button>';
+  }
   return (
-    '<div id="review-card-' + esc(id) + '" style="border:1px solid var(--border);border-radius:8px;padding:14px 16px;background:var(--surface);box-shadow:inset 1px 1px 0 rgba(255,255,255,0.35);">' +
-      '<div style="display:flex;align-items:flex-start;gap:12px;justify-content:space-between;flex-wrap:wrap;">' +
-        '<div style="min-width:0;flex:1;">' +
-          '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">' +
-            '<code style="font-size:11px;color:var(--accent);">' + esc(id) + '</code>' +
-            '<span style="font-size:11px;color:var(--text-dim);">status: ' + reviewValue(item.status) + '</span>' +
-            '<span style="font-size:11px;color:var(--text-dim);">type: ' + reviewValue(item.suggested_type) + '</span>' +
-            '<span style="font-size:11px;color:var(--text-dim);">importance: ' + reviewValue(item.suggested_importance) + '</span>' +
+    '<div id="review-card-' + esc(key) + '" class="review-card">' +
+      '<div class="review-card-inner">' +
+        '<div class="review-card-main">' +
+          '<div class="review-pill-row">' +
+            '<code class="review-id">' + esc(id) + '</code>' +
+            mismatch +
+            '<span class="review-meta-pill">status: ' + reviewValue(item.status) + '</span>' +
+            '<span class="review-meta-pill">type: ' + reviewValue(item.suggested_type) + '</span>' +
+            '<span class="review-meta-pill">importance: ' + reviewValue(item.suggested_importance) + '</span>' +
           '</div>' +
-          '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px;word-break:break-word;">' + reviewValue(item.title) + '</div>' +
-          '<div style="display:grid;grid-template-columns:130px minmax(0,1fr);gap:4px 10px;font-size:12px;color:var(--text-dim);line-height:1.6;">' +
-            '<span>tags</span><span>' + reviewTags(item.tags) + '</span>' +
-            '<span>created_by</span><span>' + reviewValue(item.created_by) + '</span>' +
-            '<span>source_file</span><span style="word-break:break-all;">' + reviewValue(item.source_file) + '</span>' +
+          '<div class="review-card-title">' + reviewValue(item.title) + '</div>' +
+          '<div class="review-card-grid">' +
+            reviewField('tags', reviewTags(item.tags)) +
+            reviewField('created_by', reviewValue(item.created_by)) +
+            reviewField('source_file', reviewValue(item.source_file)) +
+            lifecycleRows +
           '</div>' +
-          '<div style="font-size:12px;color:var(--text);line-height:1.7;margin-top:8px;white-space:pre-wrap;">' + reviewValue(item.content_summary) + '</div>' +
+          '<div class="review-card-summary">' + reviewValue(item.content_summary) + '</div>' +
           warn +
         '</div>' +
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;min-width:220px;">' +
-          '<button onclick="loadReviewDetail(' + idArg + ')" title="查看详情" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="eye"></i> 查看详情</button>' +
-          '<button onclick="rejectReviewCandidate(' + idArg + ')" title="拒绝" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="x-circle"></i> 拒绝</button>' +
-          '<button class="btn-secondary" onclick="approveReviewCandidate(' + idArg + ', true)" title="Dry-run 批准" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="scan-line"></i> Dry-run 批准</button>' +
-          '<button class="btn-danger" onclick="approveReviewCandidate(' + idArg + ', false)" ' + (formalDisabled ? 'disabled ' : '') + 'title="' + (formalDisabled ? 'explicitly_approved 不是 true，不能正式批准' : '正式批准') + '" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;' + (formalDisabled ? 'opacity:0.45;cursor:not-allowed;' : '') + '"><i data-lucide="check-circle"></i> 正式批准</button>' +
+        '<div class="review-card-actions">' +
+          actions +
         '</div>' +
       '</div>' +
     '</div>'
@@ -4878,49 +5317,82 @@ async function loadReviewDetail(id) {
   panel.style.display = '';
   detail.innerHTML = '<div class="loading">加载中…</div>';
   try {
-    var resp = await authFetch('/api/review/pending/' + encodeURIComponent(id));
+    var resp = await authFetch('/api/review/' + encodeURIComponent(reviewArea) + '/' + encodeURIComponent(id));
     if (!resp) return;
     var data = await readJsonSafe(resp);
     if (!data.ok) throw new Error(data.error || '读取失败');
     var c = data.candidate || {};
     var fm = c.frontmatter || {};
-    var keyFields = ['candidate_id','status','suggested_type','suggested_importance','tags','created_by','source_file','source_location','target_bucket_id','needs_user_confirmation','explicitly_approved','created_at'];
-    var rows = keyFields.map(function(k) {
-      return '<div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:8px;border-bottom:1px solid var(--border);padding:5px 0;"><span style="color:var(--text-dim);">' + esc(k) + '</span><span style="word-break:break-word;">' + reviewValue(fm[k]) + '</span></div>';
+    var summaryRows =
+      reviewField('title', reviewValue(c.title || fm.title)) +
+      reviewField('status', reviewValue(c.status || fm.status)) +
+      reviewField('suggested_type', reviewValue(c.suggested_type || fm.suggested_type)) +
+      reviewField('suggested_importance', reviewValue(c.suggested_importance || fm.suggested_importance)) +
+      reviewField('tags', reviewTags(c.tags || fm.tags)) +
+      reviewField('created_by', reviewValue(c.created_by || fm.created_by)) +
+      reviewField('created_at', reviewValue(c.created_at || fm.created_at));
+    if (c.approved_at || fm.approved_at) summaryRows += reviewField('approved_at', reviewValue(c.approved_at || fm.approved_at));
+    if (c.rejected_at || fm.rejected_at) summaryRows += reviewField('rejected_at', reviewValue(c.rejected_at || fm.rejected_at));
+    if (c.rejection_reason || fm.rejection_reason) summaryRows += reviewField('rejection_reason', reviewValue(c.rejection_reason || fm.rejection_reason));
+
+    var sourceRows =
+      reviewField('source_file', reviewValue(c.source_file || fm.source_file)) +
+      reviewField('original_tool', reviewValue(c.original_tool || fm.original_tool)) +
+      reviewField('perspective', reviewValue(c.perspective || fm.perspective)) +
+      reviewField('reason', reviewValue(c.reason || fm.reason)) +
+      reviewField('notes', reviewValue(c.notes || fm.notes));
+
+    var rawFields = ['candidate_key','file_name','candidate_id','candidate_id_mismatch','source_location','target_bucket_id','needs_user_confirmation','explicitly_approved','source_quote','approved_result'];
+    var rawRows = rawFields.map(function(k) {
+      return reviewField(k, reviewValue(reviewFieldValue(c, fm, k)));
     }).join('');
+    rawRows += reviewField('raw_frontmatter', reviewValue(fm));
+
     var highWarn = reviewIsHighImpact(c)
-      ? '<div style="margin:10px 0;padding:10px 12px;border:1px solid rgba(184,60,60,0.55);background:rgba(184,60,60,0.1);color:var(--negative);font-size:12px;font-weight:600;">高影响类型正式批准会写入或修改正式记忆库；必须确认 explicitly_approved=true。</div>'
+      ? '<div style="margin:10px 0;padding:10px 12px;border:1px solid rgba(184,60,60,0.55);background:rgba(184,60,60,0.1);color:var(--negative);font-size:12px;font-weight:600;">高影响类型正式批准会写入或修改正式记忆库；确认后后端会记录 explicitly_approved=true。</div>'
       : '';
     detail.innerHTML =
-      '<div style="display:grid;grid-template-columns:minmax(260px,360px) minmax(0,1fr);gap:16px;align-items:start;">' +
-        '<div>' +
-          '<h4 style="margin:0 0 8px;color:var(--text);">Frontmatter</h4>' +
-          rows +
+      '<div class="review-detail-shell">' +
+        '<section class="review-detail-section">' +
+          '<h4>摘要信息</h4>' +
+          '<div class="review-detail-summary-grid">' + summaryRows + '</div>' +
           highWarn +
-          '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">' +
-            '<button onclick="rejectReviewCandidate(' + idArg + ')" style="padding:6px 10px;font-size:12px;"><i data-lucide="x-circle"></i> 拒绝 / Reject</button>' +
-            '<button class="btn-secondary" onclick="approveReviewCandidate(' + idArg + ', true)" style="padding:6px 10px;font-size:12px;">Dry-run 批准</button>' +
-            '<button class="btn-danger" onclick="approveReviewCandidate(' + idArg + ', false)" style="padding:6px 10px;font-size:12px;">正式批准</button>' +
-          '</div>' +
-        '</div>' +
-        '<div style="min-width:0;">' +
-          '<h4 style="margin:0 0 8px;color:var(--text);">完整正文</h4>' +
-          '<pre style="white-space:pre-wrap;word-break:break-word;background:var(--surface-solid);border:1px solid var(--border);border-radius:8px;padding:12px;max-height:420px;overflow:auto;font-size:12px;line-height:1.65;">' + reviewValue(c.body) + '</pre>' +
-          '<h4 style="margin:14px 0 8px;color:var(--text);">关键字段</h4>' +
-          '<div style="display:grid;grid-template-columns:150px minmax(0,1fr);gap:6px 10px;font-size:12px;line-height:1.7;">' +
-            '<span style="color:var(--text-dim);">original_tool</span><span>' + reviewValue(c.original_tool || fm.original_tool) + '</span>' +
-            '<span style="color:var(--text-dim);">perspective</span><span>' + reviewValue(c.perspective || fm.perspective) + '</span>' +
-            '<span style="color:var(--text-dim);">reason</span><span>' + reviewValue(c.reason || fm.reason) + '</span>' +
-            '<span style="color:var(--text-dim);">notes</span><span>' + reviewValue(c.notes || fm.notes) + '</span>' +
-            '<span style="color:var(--text-dim);">source_quote</span><span style="white-space:pre-wrap;">' + reviewValue(c.source_quote || fm.source_quote) + '</span>' +
-          '</div>' +
-        '</div>' +
+        '</section>' +
+        '<section class="review-detail-section">' +
+          '<h4>完整正文</h4>' +
+          '<pre class="review-body-pre">' + reviewValue(c.body) + '</pre>' +
+        '</section>' +
+        '<section class="review-detail-section">' +
+          '<h4>来源与审核信息</h4>' +
+          '<div class="review-source-grid">' + sourceRows + '</div>' +
+        '</section>' +
+        '<details class="review-raw-details">' +
+          '<summary>显示原始字段</summary>' +
+          '<div class="review-raw-grid">' + rawRows + '</div>' +
+        '</details>' +
+        renderReviewDetailActions(idArg) +
       '</div>';
     if (window.lucide) lucide.createIcons();
     panel.scrollIntoView({behavior:'smooth', block:'nearest'});
   } catch (e) {
     detail.innerHTML = '<div style="color:var(--negative);">详情加载失败：' + esc(e.message || e) + '</div>';
   }
+}
+
+function renderReviewDetailActions(idArg) {
+  if (reviewArea === 'pending') {
+    return '<div class="review-detail-actions">' +
+      '<button onclick="rejectReviewCandidate(' + idArg + ')" style="padding:6px 10px;font-size:12px;"><i data-lucide="x-circle"></i> 拒绝 / Reject</button>' +
+      '<button class="btn-secondary" onclick="approveReviewCandidate(' + idArg + ', true)" style="padding:6px 10px;font-size:12px;">Dry-run 批准</button>' +
+      '<button class="btn-danger review-danger-action" onclick="approveReviewCandidate(' + idArg + ', false)" style="padding:6px 10px;font-size:12px;">正式批准</button>' +
+      '</div>';
+  }
+  if (reviewArea === 'rejected') {
+    return '<div class="review-detail-actions">' +
+      '<button class="btn-secondary" onclick="restoreRejectedCandidate(' + idArg + ')" style="padding:6px 10px;font-size:12px;"><i data-lucide="rotate-ccw"></i> 恢复到待审核 / Restore to Pending</button>' +
+      '</div>';
+  }
+  return '';
 }
 
 function clearReviewDetail() {
@@ -4950,17 +5422,32 @@ async function rejectReviewCandidate(id) {
   }
 }
 
+async function restoreRejectedCandidate(id) {
+  if (!confirm('确定把这条已拒绝候选恢复到待审核吗？')) return;
+  try {
+    var resp = await authFetch('/api/review/rejected/' + encodeURIComponent(id) + '/restore', {
+      method: 'POST'
+    });
+    if (!resp) return;
+    var data = await readJsonSafe(resp);
+    if (!data.ok) throw new Error(data.error || data.result || '恢复失败');
+    alert(data.result || '已恢复到待审核');
+    clearReviewDetail();
+    await loadReviewQueue();
+  } catch (e) {
+    alert('恢复失败：' + (e.message || e));
+  }
+}
+
 async function approveReviewCandidate(id, dryRun) {
-  var item = reviewCandidates.find(function(c) { return c.candidate_id === id; }) || {};
+  var item = reviewCandidates.find(function(c) { return (c.candidate_key || c.candidate_id) === id; }) || {};
   if (!dryRun) {
-    if (reviewIsHighImpact(item) && !item.explicitly_approved) {
-      alert('高影响类型必须先确认 explicitly_approved=true，当前不允许正式批准。');
-      return;
-    }
-    if (!confirm('这会把候选写入正式记忆库，确定继续吗？')) return;
+    if (!confirm('这会把候选写入正式记忆库，确定批准吗？')) return;
   }
   try {
-    var resp = await authFetch('/api/review/pending/' + encodeURIComponent(id) + '/approve?dry_run=' + (dryRun ? 'true' : 'false'), {
+    var url = '/api/review/pending/' + encodeURIComponent(id) + '/approve?dry_run=' + (dryRun ? 'true' : 'false');
+    if (!dryRun) url += '&confirmed=true';
+    var resp = await authFetch(url, {
       method: 'POST'
     });
     if (!resp) return;
@@ -6928,6 +7415,11 @@ async function detectPatterns() {
 }
 
 async function reviewAction(bid, action) {
+  var actionLabel = action === 'pin' ? '固定为永久记忆'
+    : (action === 'important' ? '标为重要'
+    : (action === 'noise' ? '标为噪声并 resolve'
+    : (action === 'delete' ? '删除' : action)));
+  if (!confirm('这会执行导入审核操作：' + actionLabel + '。确定继续吗？')) return;
   try {
     await fetch(BASE + '/api/import/review', {
       method: 'POST', headers: {'Content-Type':'application/json'},
@@ -7179,9 +7671,9 @@ function _getMcpOrigin() {
     if (!/^https?:\/\//i.test(domain)) domain = 'https://' + domain;
     return domain.replace(/\/+$/, '');
   }
-  // 本地模式：固定用 127.0.0.1 + 当前端口，保证 Claude Desktop 连本机 Docker
+  // 本地模式：使用当前访问主机，支持本机和 Tailscale 私有网络访问。
   const port = location.port || (location.protocol === 'https:' ? '443' : '80');
-  return 'http://127.0.0.1:' + port;
+  return location.protocol + '//' + location.hostname + ':' + port;
 }
 
 async function saveMcpAuth() {
@@ -7556,6 +8048,7 @@ async function bucketSaveEdit(bid) {
   if (weightEl) body.weight = parseFloat(weightEl.value) / 100;
   // 内容只在非空时带上，避免误清空
   if (newContent && newContent.trim()) body.content = newContent;
+  if (!confirm('这会修改正式记忆桶字段，确定保存吗？')) return;
   const msg = document.getElementById('edit-msg');
   msg.textContent = '保存中…';
   msg.style.color = 'var(--text-dim)';

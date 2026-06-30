@@ -33,6 +33,7 @@ _DEFAULT_REVIEW_MODE = {
 }
 
 _HIGH_IMPACT_TYPES = {"I", "feel", "anchor", "pinned", "update", "delete"}
+_REVIEW_AREAS = {"pending", "approved", "rejected"}
 _SECRET_PATTERNS = [
     re.compile(r"(?i)(authorization\s*:\s*)bearer\s+[A-Za-z0-9._~+/=-]+"),
     re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+"),
@@ -93,19 +94,30 @@ def review_mode_status() -> str:
     return "\n".join(lines)
 
 
-def _repo_root() -> Path:
+def _buckets_dir() -> Path:
     buckets_dir = ""
     if isinstance(rt.config, dict):
         buckets_dir = str(rt.config.get("buckets_dir") or "")
     if buckets_dir:
-        p = Path(buckets_dir).resolve()
-        if p.name == "buckets":
-            return p.parent
-    return Path.cwd().resolve()
+        return Path(buckets_dir).resolve()
+    env_buckets = os.environ.get("OMBRE_BUCKETS_DIR", "").strip() or os.environ.get("OMBRE_VAULT_DIR", "").strip()
+    if env_buckets:
+        return Path(env_buckets).resolve()
+    cwd = Path.cwd().resolve()
+    if cwd.name == "_app" and cwd.parent.name == "buckets":
+        return cwd.parent
+    if (cwd / "buckets").exists():
+        return (cwd / "buckets").resolve()
+    module_root = Path(__file__).resolve().parents[2]
+    if module_root.name == "_app" and module_root.parent.name == "buckets":
+        return module_root.parent
+    if (module_root / "buckets").exists():
+        return (module_root / "buckets").resolve()
+    return (cwd / "buckets").resolve()
 
 
 def _review_dir(*parts: str) -> Path:
-    path = _repo_root() / "memory_review"
+    path = _buckets_dir() / "memory_review"
     for part in parts:
         path = path / part
     path.mkdir(parents=True, exist_ok=True)
@@ -114,12 +126,18 @@ def _review_dir(*parts: str) -> Path:
 
 def _candidate_path(candidate_id: str, area: str = "pending") -> Path:
     _validate_candidate_id(candidate_id)
+    _validate_review_area(area)
     return _review_dir(area) / f"{candidate_id}.md"
 
 
 def _validate_candidate_id(candidate_id: str) -> None:
     if not _CANDIDATE_ID_RE.match(str(candidate_id or "")):
         raise ValueError("candidate_id 格式无效")
+
+
+def _validate_review_area(area: str) -> None:
+    if area not in _REVIEW_AREAS:
+        raise ValueError("review area 格式无效")
 
 
 def _next_candidate_id() -> str:
@@ -206,9 +224,13 @@ def _content_summary(content: str, limit: int = 220) -> str:
 def _candidate_record(path: Path, include_body: bool = False) -> dict:
     meta, content = _load_candidate(path)
     cid = str(meta.get("candidate_id") or path.stem)
+    key = path.stem
     title = _first_heading(content, cid)
     record = {
+        "candidate_key": key,
+        "file_name": path.name,
         "candidate_id": cid,
+        "candidate_id_mismatch": cid != key,
         "title": title,
         "suggested_type": meta.get("suggested_type", ""),
         "suggested_importance": meta.get("suggested_importance", ""),
@@ -223,6 +245,10 @@ def _candidate_record(path: Path, include_body: bool = False) -> dict:
         "reason": meta.get("reason", ""),
         "notes": meta.get("notes", ""),
         "source_quote": meta.get("source_quote", ""),
+        "rejected_at": meta.get("rejected_at", meta.get("reviewed_at", "")),
+        "rejection_reason": meta.get("rejection_reason", meta.get("reject_reason", "")),
+        "approved_at": meta.get("approved_at", ""),
+        "approved_result": meta.get("approved_result", meta.get("formal_result", "")),
         "needs_user_confirmation": _metadata_bool(meta.get("needs_user_confirmation", True)),
         "explicitly_approved": _metadata_bool(meta.get("explicitly_approved", False)),
         "target_bucket_id": meta.get("target_bucket_id", ""),
@@ -236,18 +262,28 @@ def _candidate_record(path: Path, include_body: bool = False) -> dict:
     return record
 
 
-async def list_pending_records(limit: int = 200) -> list[dict]:
-    pending = _review_dir("pending")
-    files = sorted(pending.glob("candidate-*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+async def list_review_records(area: str = "pending", limit: int = 200) -> list[dict]:
+    _validate_review_area(area)
+    directory = _review_dir(area)
+    files = sorted(directory.glob("candidate-*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
     limit = max(1, min(500, int(limit or 200)))
     return [_candidate_record(path, include_body=False) for path in files[:limit]]
 
 
-async def read_pending_record(candidate_id: str) -> dict | None:
-    path = _candidate_path(candidate_id, "pending")
+async def list_pending_records(limit: int = 200) -> list[dict]:
+    return await list_review_records("pending", limit=limit)
+
+
+async def read_review_record(area: str, candidate_id: str) -> dict | None:
+    _validate_review_area(area)
+    path = _candidate_path(candidate_id, area)
     if not path.exists():
         return None
     return _candidate_record(path, include_body=True)
+
+
+async def read_pending_record(candidate_id: str) -> dict | None:
+    return await read_review_record("pending", candidate_id)
 
 
 def _format_value(value: Any) -> str:
@@ -290,29 +326,6 @@ async def create_pending_candidate(
     needs_confirmation = True
     explicitly_approved = False
     created_at = datetime.now().isoformat(timespec="seconds")
-    candidate_id = _next_candidate_id()
-    metadata = {
-        "candidate_id": candidate_id,
-        "status": "pending",
-        "original_tool": original_tool,
-        "suggested_type": suggested_type,
-        "suggested_importance": suggested_importance,
-        "tags": tags,
-        "source_file": source_file,
-        "source_location": source_location,
-        "source_quote": redacted_quote or "",
-        "created_by": "mcp",
-        "needs_user_confirmation": needs_confirmation,
-        "explicitly_approved": explicitly_approved,
-        "original_arguments_redacted": redacted_args,
-        "reason": redacted_reason or "",
-        "notes": notes or "",
-        "created_at": created_at,
-    }
-    if target_bucket_id:
-        metadata["target_bucket_id"] = target_bucket_id
-    if redacted_updates:
-        metadata["planned_updates"] = redacted_updates
 
     arg_summary = "\n".join(
         f"- {k}: {_format_value(v)}" for k, v in (redacted_args or {}).items()
@@ -345,9 +358,40 @@ async def create_pending_candidate(
 
 批准 / 修改后批准 / 拒绝 / 等 CC 酱确认 / 等猫茶确认
 """
-    path = _candidate_path(candidate_id, "pending")
-    path.write_text(_dump_candidate(metadata, body), encoding="utf-8")
-    return {"candidate_id": candidate_id, "path": str(path), "suggested_type": suggested_type}
+    last_error = None
+    for _attempt in range(1000):
+        candidate_id = _next_candidate_id()
+        metadata = {
+            "candidate_id": candidate_id,
+            "status": "pending",
+            "original_tool": original_tool,
+            "suggested_type": suggested_type,
+            "suggested_importance": suggested_importance,
+            "tags": tags,
+            "source_file": source_file,
+            "source_location": source_location,
+            "source_quote": redacted_quote or "",
+            "created_by": "mcp",
+            "needs_user_confirmation": needs_confirmation,
+            "explicitly_approved": explicitly_approved,
+            "original_arguments_redacted": redacted_args,
+            "reason": redacted_reason or "",
+            "notes": notes or "",
+            "created_at": created_at,
+        }
+        if target_bucket_id:
+            metadata["target_bucket_id"] = target_bucket_id
+        if redacted_updates:
+            metadata["planned_updates"] = redacted_updates
+        path = _candidate_path(candidate_id, "pending")
+        try:
+            with path.open("x", encoding="utf-8") as fh:
+                fh.write(_dump_candidate(metadata, body))
+            return {"candidate_id": candidate_id, "path": str(path), "suggested_type": suggested_type}
+        except FileExistsError as e:
+            last_error = e
+            continue
+    raise RuntimeError(f"无法生成唯一 pending candidate_id：{last_error}")
 
 
 def pending_response(candidate: dict) -> str:
@@ -415,7 +459,9 @@ async def reject_pending_memory(candidate_id: str, reason: str = "") -> str:
         return f"未找到 pending 候选：{candidate_id}"
     meta, content = _load_candidate(src)
     meta["status"] = "rejected"
+    meta["rejected_at"] = datetime.now().isoformat(timespec="seconds")
     if reason:
+        meta["rejection_reason"] = reason[:500]
         meta["reject_reason"] = reason[:500]
     meta["reviewed_at"] = datetime.now().isoformat(timespec="seconds")
     src.write_text(_dump_candidate(meta, content), encoding="utf-8")
@@ -424,6 +470,24 @@ async def reject_pending_memory(candidate_id: str, reason: str = "") -> str:
         dst = _review_dir("rejected") / f"{candidate_id}-{datetime.now().strftime('%H%M%S')}.md"
     shutil.move(str(src), str(dst))
     return f"已拒绝并移动到 rejected：{candidate_id}"
+
+
+async def restore_rejected_memory(candidate_id: str) -> str:
+    src = _candidate_path(candidate_id, "rejected")
+    if not src.exists():
+        return f"未找到 rejected 候选：{candidate_id}"
+    meta, content = _load_candidate(src)
+    meta["status"] = "pending"
+    meta["explicitly_approved"] = False
+    meta["needs_user_confirmation"] = True
+    meta["restored_at"] = datetime.now().isoformat(timespec="seconds")
+    meta["restored_from"] = "rejected"
+    src.write_text(_dump_candidate(meta, content), encoding="utf-8")
+    dst = _candidate_path(candidate_id, "pending")
+    if dst.exists():
+        dst = _review_dir("pending") / f"{candidate_id}-{datetime.now().strftime('%H%M%S')}.md"
+    shutil.move(str(src), str(dst))
+    return f"已恢复到 pending：{candidate_id}"
 
 
 def _approval_blockers(meta: dict) -> list[str]:
@@ -438,11 +502,16 @@ def _approval_blockers(meta: dict) -> list[str]:
     return blockers
 
 
-async def approve_pending_memory(candidate_id: str, dry_run: bool = True) -> str:
+async def approve_pending_memory(candidate_id: str, dry_run: bool = True, confirmed: bool = False) -> str:
     src = _candidate_path(candidate_id, "pending")
     if not src.exists():
         return f"未找到 pending 候选：{candidate_id}"
     meta, body = _load_candidate(src)
+    if not dry_run and confirmed:
+        meta["explicitly_approved"] = True
+        meta["confirmed_at"] = datetime.now().isoformat(timespec="seconds")
+        meta["confirmed_via"] = "review_approve_confirmed"
+        src.write_text(_dump_candidate(meta, body), encoding="utf-8")
     suggested_type = str(meta.get("suggested_type") or "bucket")
     title = _first_heading(body, candidate_id)
     content = _section(body, "候选内容")
@@ -454,6 +523,7 @@ async def approve_pending_memory(candidate_id: str, dry_run: bool = True) -> str
         f"类型：{suggested_type}\n"
         f"标题：{title}\n"
         f"dry_run：{dry_run}\n"
+        f"confirmed：{confirmed}\n"
         f"将执行：按 {suggested_type} 语义写入或更新正式 buckets。"
     )
     if blockers:
@@ -585,7 +655,8 @@ async def approve_pending_memory(candidate_id: str, dry_run: bool = True) -> str
 
     meta["status"] = "approved"
     meta["approved_at"] = datetime.now().isoformat(timespec="seconds")
-    meta["formal_result"] = {"bucket_id": bucket_id, "suggested_type": suggested_type}
+    meta["approved_result"] = {"bucket_id": bucket_id, "suggested_type": suggested_type}
+    meta["formal_result"] = meta["approved_result"]
     src.write_text(_dump_candidate(meta, body), encoding="utf-8")
     dst = _candidate_path(candidate_id, "approved")
     if dst.exists():

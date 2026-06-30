@@ -23,6 +23,17 @@ def _ok(**payload) -> JSONResponse:
     return JSONResponse(data)
 
 
+def _truthy(value) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _review_area(value: str) -> str:
+    area = str(value or "").strip().lower()
+    if area not in {"pending", "approved", "rejected"}:
+        raise ValueError("review status must be pending, approved, or rejected")
+    return area
+
+
 def register(mcp) -> None:
     @mcp.custom_route("/api/review/pending", methods=["GET"])
     async def api_review_pending(request: Request) -> Response:
@@ -33,6 +44,30 @@ def register(mcp) -> None:
             limit = int(request.query_params.get("limit", "200"))
             items = await review_gate.list_pending_records(limit=limit)
             return _ok(candidates=items, total=len(items))
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+    @mcp.custom_route("/api/review/approved", methods=["GET"])
+    async def api_review_approved(request: Request) -> Response:
+        err = sh._require_auth(request)
+        if err:
+            return err
+        try:
+            limit = int(request.query_params.get("limit", "200"))
+            items = await review_gate.list_review_records("approved", limit=limit)
+            return _ok(candidates=items, total=len(items), status="approved")
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+    @mcp.custom_route("/api/review/rejected", methods=["GET"])
+    async def api_review_rejected(request: Request) -> Response:
+        err = sh._require_auth(request)
+        if err:
+            return err
+        try:
+            limit = int(request.query_params.get("limit", "200"))
+            items = await review_gate.list_review_records("rejected", limit=limit)
+            return _ok(candidates=items, total=len(items), status="rejected")
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
@@ -47,6 +82,23 @@ def register(mcp) -> None:
             if not item:
                 return JSONResponse({"ok": False, "error": "Pending candidate not found"}, status_code=404)
             return _ok(candidate=item)
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+    @mcp.custom_route("/api/review/{status}/{candidate_id}", methods=["GET"])
+    async def api_review_candidate_detail(request: Request) -> Response:
+        err = sh._require_auth(request)
+        if err:
+            return err
+        candidate_id = request.path_params.get("candidate_id", "")
+        try:
+            area = _review_area(request.path_params.get("status", ""))
+            item = await review_gate.read_review_record(area, candidate_id)
+            if not item:
+                return JSONResponse({"ok": False, "error": f"{area} candidate not found"}, status_code=404)
+            return _ok(candidate=item, status=area)
+        except ValueError as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
@@ -73,6 +125,22 @@ def register(mcp) -> None:
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
+    @mcp.custom_route("/api/review/rejected/{candidate_id}/restore", methods=["POST"])
+    async def api_review_rejected_restore(request: Request) -> Response:
+        err = sh._require_auth(request)
+        if err:
+            return err
+        candidate_id = request.path_params.get("candidate_id", "")
+        try:
+            result = await review_gate.restore_rejected_memory(candidate_id)
+            not_found = "未找到" in result or "not found" in result.lower()
+            return JSONResponse(
+                {"ok": not not_found, "result": result},
+                status_code=404 if not_found else 200,
+            )
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
     @mcp.custom_route("/api/review/pending/{candidate_id}/approve", methods=["POST"])
     async def api_review_pending_approve(request: Request) -> Response:
         err = sh._require_auth(request)
@@ -81,16 +149,40 @@ def register(mcp) -> None:
         candidate_id = request.path_params.get("candidate_id", "")
         dry_raw = str(request.query_params.get("dry_run", "true")).strip().lower()
         dry_run = dry_raw not in {"0", "false", "no", "off"}
+        confirmed = _truthy(request.query_params.get("confirmed", ""))
+        if not confirmed:
+            try:
+                if (request.headers.get("content-type") or "").lower().startswith("application/json"):
+                    body = await request.json()
+                    confirmed = _truthy(body.get("confirmed"))
+            except Exception:
+                confirmed = False
+        if not dry_run and not confirmed:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "dry_run": dry_run,
+                    "confirmed": False,
+                    "blocked": True,
+                    "result": "正式批准需要 confirmed=true；未修改正式记忆库。",
+                },
+                status_code=409,
+            )
         try:
-            result = await review_gate.approve_pending_memory(candidate_id, dry_run=dry_run)
+            result = await review_gate.approve_pending_memory(
+                candidate_id,
+                dry_run=dry_run,
+                confirmed=confirmed,
+            )
             not_found = "未找到" in result or "not found" in result.lower()
             blocked = "阻止正式批准" in result or "未修改正式记忆库" in result and not dry_run
-            approved = "写入正式" in result or "approved" in result.lower()
+            approved = "bucket_id=" in result or "写入正式" in result or "approved" in result.lower()
             status = 404 if not_found else (409 if blocked and not dry_run else 200)
             return JSONResponse(
                 {
                     "ok": (not not_found) and (dry_run or approved or not blocked),
                     "dry_run": dry_run,
+                    "confirmed": confirmed,
                     "blocked": blocked,
                     "result": result,
                 },

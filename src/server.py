@@ -826,12 +826,20 @@ async def reject_pending_memory(candidate_id: str, reason: Optional[str] = "") -
 
 
 @mcp_extra.tool()
-async def approve_pending_memory(candidate_id: str, dry_run: Optional[bool] = True) -> str:
+async def approve_pending_memory(
+    candidate_id: str,
+    dry_run: Optional[bool] = True,
+    confirmed: Optional[bool] = False,
+) -> str:
     """批准单条 pending 候选。默认 dry_run=True 只报告将执行什么；dry_run=False 且满足审批条件时才写入正式 buckets。"""
     return await _with_notice(
-        _t_review_gate.approve_pending_memory(candidate_id, dry_run=True if dry_run is None else dry_run),
+        _t_review_gate.approve_pending_memory(
+            candidate_id,
+            dry_run=True if dry_run is None else dry_run,
+            confirmed=False if confirmed is None else confirmed,
+        ),
         op="approve_pending_memory",
-        args={"candidate_id": candidate_id, "dry_run": dry_run},
+        args={"candidate_id": candidate_id, "dry_run": dry_run, "confirmed": confirmed},
     )
 
 
