@@ -1785,6 +1785,7 @@
   <div class="tab" data-tab="letters"><span>信</span><span class="tab-en">Letters</span></div>
   <div class="tab" data-tab="anchors"><span>锚点</span><span class="tab-en">Anchors</span></div>
   <div class="tab" data-tab="import"><span>导入</span><span class="tab-en">Import</span></div>
+  <div class="tab" data-tab="review"><span>审核</span><span class="tab-en">Review</span></div>
   <div class="tab" data-tab="logs"><span>日志</span><span class="tab-en">Logs</span></div>
   <div class="tab" data-tab="settings"><span>设置</span><span class="tab-en">Settings</span></div>
   <div class="tab" data-tab="v3-debug"><span>2.4.0 Debug</span><span class="tab-en">Replay</span></div>
@@ -1977,6 +1978,29 @@
     <h3>高频模式检测</h3>
     <button onclick="detectPatterns()" class="icon-btn"><i data-lucide="activity"></i> 检测高频模式</button>
     <div id="import-patterns" style="margin-top:16px;"></div>
+  </div>
+</div>
+
+<div class="content" id="review-view" style="display:none">
+  <div style="max-width:1080px;margin:0 auto;">
+    <div class="config-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+        <h3 style="margin:0;">审核 / Review</h3>
+        <button class="btn-secondary" onclick="loadReviewQueue()" title="刷新审核队列" style="padding:8px 14px;font-size:12px;display:inline-flex;align-items:center;gap:5px;"><i data-lucide="refresh-cw"></i> 刷新</button>
+      </div>
+      <div id="review-meta" style="font-size:12px;color:var(--text-dim);min-height:18px;margin-bottom:10px;"></div>
+      <div id="review-list" style="display:flex;flex-direction:column;gap:10px;">
+        <div class="loading">加载中…</div>
+      </div>
+    </div>
+
+    <div class="config-section" id="review-detail-panel" style="display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
+        <h3 style="margin:0;">候选详情</h3>
+        <button onclick="clearReviewDetail()" title="关闭详情" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="x"></i> 关闭</button>
+      </div>
+      <div id="review-detail" style="font-size:12px;line-height:1.7;color:var(--text);"></div>
+    </div>
   </div>
 </div>
 
@@ -3795,6 +3819,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.getElementById('tools-view').style.display = target === 'tools' ? '' : 'none';
     document.getElementById('plan-view').style.display = target === 'plan' ? '' : 'none';
     document.getElementById('import-view').style.display = target === 'import' ? '' : 'none';
+    document.getElementById('review-view').style.display = target === 'review' ? '' : 'none';
     document.getElementById('logs-view').style.display = target === 'logs' ? '' : 'none';
     document.getElementById('v3-debug-view').style.display = target === 'v3-debug' ? '' : 'none';
     document.getElementById('settings-view').style.display = target === 'settings' ? '' : 'none';
@@ -3806,6 +3831,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     if (target === 'tools') loadToolsPanel();
     if (target === 'plan') loadPlans();
     if (target === 'import') { pollImportStatus(); loadImportResults(); }
+    if (target === 'review') loadReviewQueue();
     if (target === 'logs') { loadLogs(); loadOBErrors(); }
     if (target === 'v3-debug') loadV3Debug();
     if (target === 'settings') {
@@ -4752,6 +4778,200 @@ function esc(s) {
   var d = document.createElement('div');
   d.textContent = s;
   return d.innerHTML;
+}
+
+var reviewCandidates = [];
+var reviewSelectedId = '';
+var REVIEW_HIGH_IMPACT_TYPES = ['I', 'feel', 'anchor', 'pinned', 'update', 'delete'];
+
+function reviewTags(tags) {
+  if (!Array.isArray(tags) || !tags.length) return '—';
+  return tags.map(function(t) { return '<code style="font-size:11px;">' + esc(t) + '</code>'; }).join(' ');
+}
+
+function reviewIsHighImpact(item) {
+  return REVIEW_HIGH_IMPACT_TYPES.indexOf(String(item && item.suggested_type || '')) >= 0;
+}
+
+function reviewValue(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  if (Array.isArray(v)) return v.length ? v.map(esc).join(', ') : '—';
+  if (typeof v === 'object') return esc(JSON.stringify(v, null, 2));
+  return esc(String(v));
+}
+
+async function loadReviewQueue() {
+  var list = document.getElementById('review-list');
+  var meta = document.getElementById('review-meta');
+  if (!list || !meta) return;
+  meta.textContent = '加载中…';
+  list.innerHTML = '<div class="loading">加载中…</div>';
+  try {
+    var resp = await authFetch('/api/review/pending?limit=200');
+    if (!resp) return;
+    var data = await readJsonSafe(resp);
+    if (!data.ok) throw new Error(data.error || '读取失败');
+    reviewCandidates = data.candidates || [];
+    meta.textContent = '待审核候选：' + reviewCandidates.length + ' 条';
+    if (!reviewCandidates.length) {
+      list.innerHTML =
+        '<div style="padding:28px 18px;text-align:center;color:var(--text-dim);font-size:13px;line-height:1.8;border:1px solid var(--border);border-radius:8px;background:var(--surface);">' +
+        '<div style="font-weight:600;color:var(--text);margin-bottom:4px;">暂无待审核记忆。</div>' +
+        '<div>新的 hold / grow / trace 写入会先进入这里，等待主人确认。</div>' +
+        '</div>';
+      clearReviewDetail();
+      return;
+    }
+    list.innerHTML = reviewCandidates.map(renderReviewCandidate).join('');
+    if (window.lucide) lucide.createIcons();
+  } catch (e) {
+    meta.textContent = '';
+    list.innerHTML = '<div style="color:var(--negative);font-size:13px;padding:16px;">审核队列加载失败：' + esc(e.message || e) + '</div>';
+  }
+}
+
+function renderReviewCandidate(item) {
+  var id = item.candidate_id || '';
+  var idArg = JSON.stringify(id).replace(/"/g, '&quot;');
+  var high = reviewIsHighImpact(item);
+  var approved = !!item.explicitly_approved;
+  var formalDisabled = high && !approved;
+  var warn = high
+    ? '<div style="margin-top:8px;padding:8px 10px;border:1px solid rgba(184,60,60,0.45);background:rgba(184,60,60,0.08);color:var(--negative);font-size:12px;line-height:1.5;">高影响类型：默认只允许 dry-run。explicitly_approved 不是 true 时不能正式批准。</div>'
+    : '';
+  return (
+    '<div id="review-card-' + esc(id) + '" style="border:1px solid var(--border);border-radius:8px;padding:14px 16px;background:var(--surface);box-shadow:inset 1px 1px 0 rgba(255,255,255,0.35);">' +
+      '<div style="display:flex;align-items:flex-start;gap:12px;justify-content:space-between;flex-wrap:wrap;">' +
+        '<div style="min-width:0;flex:1;">' +
+          '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">' +
+            '<code style="font-size:11px;color:var(--accent);">' + esc(id) + '</code>' +
+            '<span style="font-size:11px;color:var(--text-dim);">status: ' + reviewValue(item.status) + '</span>' +
+            '<span style="font-size:11px;color:var(--text-dim);">type: ' + reviewValue(item.suggested_type) + '</span>' +
+            '<span style="font-size:11px;color:var(--text-dim);">importance: ' + reviewValue(item.suggested_importance) + '</span>' +
+          '</div>' +
+          '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px;word-break:break-word;">' + reviewValue(item.title) + '</div>' +
+          '<div style="display:grid;grid-template-columns:130px minmax(0,1fr);gap:4px 10px;font-size:12px;color:var(--text-dim);line-height:1.6;">' +
+            '<span>tags</span><span>' + reviewTags(item.tags) + '</span>' +
+            '<span>created_by</span><span>' + reviewValue(item.created_by) + '</span>' +
+            '<span>source_file</span><span style="word-break:break-all;">' + reviewValue(item.source_file) + '</span>' +
+          '</div>' +
+          '<div style="font-size:12px;color:var(--text);line-height:1.7;margin-top:8px;white-space:pre-wrap;">' + reviewValue(item.content_summary) + '</div>' +
+          warn +
+        '</div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;min-width:220px;">' +
+          '<button onclick="loadReviewDetail(' + idArg + ')" title="查看详情" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="eye"></i> 查看详情</button>' +
+          '<button onclick="rejectReviewCandidate(' + idArg + ')" title="拒绝" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="x-circle"></i> 拒绝</button>' +
+          '<button class="btn-secondary" onclick="approveReviewCandidate(' + idArg + ', true)" title="Dry-run 批准" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="scan-line"></i> Dry-run 批准</button>' +
+          '<button class="btn-danger" onclick="approveReviewCandidate(' + idArg + ', false)" ' + (formalDisabled ? 'disabled ' : '') + 'title="' + (formalDisabled ? 'explicitly_approved 不是 true，不能正式批准' : '正式批准') + '" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;' + (formalDisabled ? 'opacity:0.45;cursor:not-allowed;' : '') + '"><i data-lucide="check-circle"></i> 正式批准</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+async function loadReviewDetail(id) {
+  var idArg = JSON.stringify(id).replace(/"/g, '&quot;');
+  reviewSelectedId = id;
+  var panel = document.getElementById('review-detail-panel');
+  var detail = document.getElementById('review-detail');
+  if (!panel || !detail) return;
+  panel.style.display = '';
+  detail.innerHTML = '<div class="loading">加载中…</div>';
+  try {
+    var resp = await authFetch('/api/review/pending/' + encodeURIComponent(id));
+    if (!resp) return;
+    var data = await readJsonSafe(resp);
+    if (!data.ok) throw new Error(data.error || '读取失败');
+    var c = data.candidate || {};
+    var fm = c.frontmatter || {};
+    var keyFields = ['candidate_id','status','suggested_type','suggested_importance','tags','created_by','source_file','source_location','target_bucket_id','needs_user_confirmation','explicitly_approved','created_at'];
+    var rows = keyFields.map(function(k) {
+      return '<div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:8px;border-bottom:1px solid var(--border);padding:5px 0;"><span style="color:var(--text-dim);">' + esc(k) + '</span><span style="word-break:break-word;">' + reviewValue(fm[k]) + '</span></div>';
+    }).join('');
+    var highWarn = reviewIsHighImpact(c)
+      ? '<div style="margin:10px 0;padding:10px 12px;border:1px solid rgba(184,60,60,0.55);background:rgba(184,60,60,0.1);color:var(--negative);font-size:12px;font-weight:600;">高影响类型正式批准会写入或修改正式记忆库；必须确认 explicitly_approved=true。</div>'
+      : '';
+    detail.innerHTML =
+      '<div style="display:grid;grid-template-columns:minmax(260px,360px) minmax(0,1fr);gap:16px;align-items:start;">' +
+        '<div>' +
+          '<h4 style="margin:0 0 8px;color:var(--text);">Frontmatter</h4>' +
+          rows +
+          highWarn +
+          '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">' +
+            '<button onclick="rejectReviewCandidate(' + idArg + ')" style="padding:6px 10px;font-size:12px;"><i data-lucide="x-circle"></i> 拒绝 / Reject</button>' +
+            '<button class="btn-secondary" onclick="approveReviewCandidate(' + idArg + ', true)" style="padding:6px 10px;font-size:12px;">Dry-run 批准</button>' +
+            '<button class="btn-danger" onclick="approveReviewCandidate(' + idArg + ', false)" style="padding:6px 10px;font-size:12px;">正式批准</button>' +
+          '</div>' +
+        '</div>' +
+        '<div style="min-width:0;">' +
+          '<h4 style="margin:0 0 8px;color:var(--text);">完整正文</h4>' +
+          '<pre style="white-space:pre-wrap;word-break:break-word;background:var(--surface-solid);border:1px solid var(--border);border-radius:8px;padding:12px;max-height:420px;overflow:auto;font-size:12px;line-height:1.65;">' + reviewValue(c.body) + '</pre>' +
+          '<h4 style="margin:14px 0 8px;color:var(--text);">关键字段</h4>' +
+          '<div style="display:grid;grid-template-columns:150px minmax(0,1fr);gap:6px 10px;font-size:12px;line-height:1.7;">' +
+            '<span style="color:var(--text-dim);">original_tool</span><span>' + reviewValue(c.original_tool || fm.original_tool) + '</span>' +
+            '<span style="color:var(--text-dim);">perspective</span><span>' + reviewValue(c.perspective || fm.perspective) + '</span>' +
+            '<span style="color:var(--text-dim);">reason</span><span>' + reviewValue(c.reason || fm.reason) + '</span>' +
+            '<span style="color:var(--text-dim);">notes</span><span>' + reviewValue(c.notes || fm.notes) + '</span>' +
+            '<span style="color:var(--text-dim);">source_quote</span><span style="white-space:pre-wrap;">' + reviewValue(c.source_quote || fm.source_quote) + '</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    if (window.lucide) lucide.createIcons();
+    panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+  } catch (e) {
+    detail.innerHTML = '<div style="color:var(--negative);">详情加载失败：' + esc(e.message || e) + '</div>';
+  }
+}
+
+function clearReviewDetail() {
+  reviewSelectedId = '';
+  var panel = document.getElementById('review-detail-panel');
+  var detail = document.getElementById('review-detail');
+  if (panel) panel.style.display = 'none';
+  if (detail) detail.innerHTML = '';
+}
+
+async function rejectReviewCandidate(id) {
+  if (!confirm('确定拒绝这条候选吗？')) return;
+  try {
+    var resp = await authFetch('/api/review/pending/' + encodeURIComponent(id) + '/reject', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({reason:'dashboard reject'})
+    });
+    if (!resp) return;
+    var data = await readJsonSafe(resp);
+    if (!data.ok) throw new Error(data.error || data.result || '拒绝失败');
+    alert(data.result || '已拒绝');
+    clearReviewDetail();
+    await loadReviewQueue();
+  } catch (e) {
+    alert('拒绝失败：' + (e.message || e));
+  }
+}
+
+async function approveReviewCandidate(id, dryRun) {
+  var item = reviewCandidates.find(function(c) { return c.candidate_id === id; }) || {};
+  if (!dryRun) {
+    if (reviewIsHighImpact(item) && !item.explicitly_approved) {
+      alert('高影响类型必须先确认 explicitly_approved=true，当前不允许正式批准。');
+      return;
+    }
+    if (!confirm('这会把候选写入正式记忆库，确定继续吗？')) return;
+  }
+  try {
+    var resp = await authFetch('/api/review/pending/' + encodeURIComponent(id) + '/approve?dry_run=' + (dryRun ? 'true' : 'false'), {
+      method: 'POST'
+    });
+    if (!resp) return;
+    var data = await readJsonSafe(resp);
+    if (!data.ok && !data.result) throw new Error(data.error || '批准失败');
+    alert(data.result || (dryRun ? 'Dry-run 完成' : '批准完成'));
+    if (!dryRun && data.ok) clearReviewDetail();
+    await loadReviewQueue();
+  } catch (e) {
+    alert((dryRun ? 'Dry-run 失败：' : '正式批准失败：') + (e.message || e));
+  }
 }
 
 // iter 1.9 A: plan weight 的中文档位锚点 / semantic anchors for plan weight

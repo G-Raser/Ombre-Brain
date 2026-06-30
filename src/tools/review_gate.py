@@ -196,6 +196,60 @@ def _section(content: str, heading: str) -> str:
     return match.group(1).strip() if match else ""
 
 
+def _content_summary(content: str, limit: int = 220) -> str:
+    text = re.sub(r"\s+", " ", _section(content, "候选内容") or content or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rstrip() + "…"
+
+
+def _candidate_record(path: Path, include_body: bool = False) -> dict:
+    meta, content = _load_candidate(path)
+    cid = str(meta.get("candidate_id") or path.stem)
+    title = _first_heading(content, cid)
+    record = {
+        "candidate_id": cid,
+        "title": title,
+        "suggested_type": meta.get("suggested_type", ""),
+        "suggested_importance": meta.get("suggested_importance", ""),
+        "tags": meta.get("tags") or [],
+        "created_by": meta.get("created_by", ""),
+        "source_file": meta.get("source_file", ""),
+        "status": meta.get("status", "pending"),
+        "content_summary": _content_summary(content),
+        "created_at": meta.get("created_at", ""),
+        "original_tool": meta.get("original_tool", ""),
+        "perspective": meta.get("perspective", ""),
+        "reason": meta.get("reason", ""),
+        "notes": meta.get("notes", ""),
+        "source_quote": meta.get("source_quote", ""),
+        "needs_user_confirmation": _metadata_bool(meta.get("needs_user_confirmation", True)),
+        "explicitly_approved": _metadata_bool(meta.get("explicitly_approved", False)),
+        "target_bucket_id": meta.get("target_bucket_id", ""),
+    }
+    if include_body:
+        record["frontmatter"] = meta
+        record["body"] = content
+        record["candidate_content"] = _section(content, "候选内容")
+        record["original_arguments_summary"] = _section(content, "原始调用摘要")
+        record["planned_updates_summary"] = _section(content, "计划修改字段")
+    return record
+
+
+async def list_pending_records(limit: int = 200) -> list[dict]:
+    pending = _review_dir("pending")
+    files = sorted(pending.glob("candidate-*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+    limit = max(1, min(500, int(limit or 200)))
+    return [_candidate_record(path, include_body=False) for path in files[:limit]]
+
+
+async def read_pending_record(candidate_id: str) -> dict | None:
+    path = _candidate_path(candidate_id, "pending")
+    if not path.exists():
+        return None
+    return _candidate_record(path, include_body=True)
+
+
 def _format_value(value: Any) -> str:
     if isinstance(value, (dict, list)):
         return json.dumps(value, ensure_ascii=False, indent=2)
