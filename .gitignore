@@ -15,6 +15,8 @@ venv/
 .vscode/
 config.yaml
 buckets/
+buckets_backup*/
+backups/
 test_buckets/
 *.log
 server.log
@@ -24,6 +26,20 @@ backup_*/
 *.db
 import_state.json
 data/
+raw_archive/
+cleaned_chunks/
+import_batches/
+_tmp_review_gate_tests/
+
+# Memory review queue: track docs/templates only, never candidate data or reports
+memory_review/pending/*
+!memory_review/pending/.gitkeep
+memory_review/approved/*
+!memory_review/approved/.gitkeep
+memory_review/rejected/*
+!memory_review/rejected/.gitkeep
+memory_review/reports/*
+!memory_review/reports/.gitkeep
 
 # 内部沟通 / 设计稿 / 复盘 / 迭代 spec —— 不上传
 # Internal design docs, reflections, iteration specs — local only
