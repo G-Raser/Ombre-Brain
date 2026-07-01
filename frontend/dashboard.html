@@ -10,6 +10,41 @@
 <link rel="manifest" href="/static/manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;500;600&family=Noto+Sans+SC:wght@400;500&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+<script>
+  (function() {
+    var KEY = 'ombre_dashboard_theme';
+    var DEFAULT_THEME = 'umi-purple';
+    var THEMES = {
+      'ombre-original': '#E7E2D8',
+      'umi-purple': '#0C0712',
+      'cattea-gold-black': '#080808',
+      'cc-gold-brown': '#17100C'
+    };
+    function normalizeTheme(value) {
+      return Object.prototype.hasOwnProperty.call(THEMES, value) ? value : DEFAULT_THEME;
+    }
+    window.setDashboardTheme = function(value, persist) {
+      var theme = normalizeTheme(value);
+      document.documentElement.setAttribute('data-theme', theme);
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', THEMES[theme]);
+      if (persist !== false) {
+        try { localStorage.setItem(KEY, theme); } catch (_) {}
+      }
+      var select = document.getElementById('theme-select');
+      if (select && select.value !== theme) select.value = theme;
+      return theme;
+    };
+    window.getDashboardTheme = function() {
+      try { return normalizeTheme(localStorage.getItem(KEY)); } catch (_) { return DEFAULT_THEME; }
+    };
+    window.OMBRE_THEME_STORAGE_KEY = KEY;
+    window.setDashboardTheme(window.getDashboardTheme(), false);
+    document.addEventListener('DOMContentLoaded', function() {
+      window.setDashboardTheme(window.getDashboardTheme(), false);
+    });
+  })();
+</script>
 <style>
   @font-face {
     font-family: 'RRPL';
@@ -20,46 +55,191 @@
   }
 
   :root {
-    /* === 复古掌机 retro-handheld palette — warm cream plastic + pale LCD + gold === */
-    --bg: #E7E2D8;                    /* 外环境米灰（带颗粒感） */
-    --bg-gradient: #E7E2D8;
-    --surface: #F4F0E8;              /* 凸起塑料外壳 */
-    --surface-solid: #EDE8DE;        /* 次级外壳块 */
-    --border: #DCD6CA;                /* 极柔的分隔（几乎无线条感） */
-    --border-strong: #C7C0B2;
-    --text: #2C2A26;                  /* 墨黑 */
-    --text-dim: #6E695E;
-    --text-light: #9E988C;
-    --accent: #C2982F;                /* 暖金（高亮/激活态） */
-    --accent-light: #D7B14A;
-    --accent-glow: rgba(194, 152, 47, 0.22);
-    --positive: #87A987;
-    --negative: #BE5A41;              /* 删除/危险红 */
-    --warning: #B89762;
-    /* 拟物化双向光影：高光（左上）+ 阴影（右下）。原作者把高光设成透明=关闭了立体感，这里点亮。 */
-    --shadow-light: rgba(255, 253, 247, 0.9);
-    --shadow-dark: rgba(150, 138, 116, 0.40);
-    --shadow-dark-subtle: rgba(150, 138, 116, 0.22);
-    /* LCD 点阵屏 */
-    --lcd: #C7C9BC;                   /* 屏底（灰绿单色） */
-    --lcd-text: #25271E;              /* 屏上深字 */
-    --lcd-dim: #5B5D4F;
-    --lcd-glow: rgba(37, 39, 30, 0.18);
+    --font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+    --font-display: "Cormorant Garamond", "Noto Serif SC", Georgia, serif;
+    --font-mono: "SF Mono", "Fira Code", Consolas, "Liberation Mono", Menlo, monospace;
+
+    --bg: #0C0712;
+    --bg-soft: #15101C;
+    --bg-gradient: #0C0712;
+    --panel: #17101F;
+    --panel-strong: #21172C;
+    --card: #221A2B;
+    --card-hover: #2A2135;
+    --border: #3A3047;
+    --border-soft: #2A2334;
+    --text: #F1ECF7;
+    --text-muted: #B7A9C7;
+    --text-faint: #7F728E;
+    --accent: #BFA5FF;
+    --accent-soft: rgba(191, 165, 255, 0.18);
+    --accent-strong: #D7C8FF;
+    --danger: #D98A9B;
+    --danger-soft: rgba(217, 138, 155, 0.15);
+    --success: #A9C7A1;
+    --warning: #C9A874;
+    --shadow: 0 18px 44px rgba(2, 1, 4, 0.45);
+    --chip-bg: rgba(191, 165, 255, 0.10);
+    --button-bg: #241B2E;
+    --button-border: #42364F;
+
+    --surface: var(--panel);
+    --surface-solid: var(--card);
+    --border-strong: #51445F;
+    --text-dim: var(--text-muted);
+    --text-light: var(--text-faint);
+    --accent-light: var(--accent-strong);
+    --accent-glow: rgba(191, 165, 255, 0.24);
+    --positive: var(--success);
+    --negative: var(--danger);
+    --shadow-light: rgba(255, 255, 255, 0.045);
+    --shadow-dark: rgba(0, 0, 0, 0.50);
+    --shadow-dark-subtle: rgba(0, 0, 0, 0.28);
+    --lcd: #1F2630;
+    --lcd-text: #D8E2D1;
+    --lcd-dim: #8D9A8A;
+    --lcd-glow: rgba(191, 165, 255, 0.16);
     --shell-radius: 24px;
     --radius-inner: 16px;
     --radius-control: 12px;
   }
 
+  html[data-theme="ombre-original"] {
+    --bg: #E7E2D8;
+    --bg-soft: #EFE9DE;
+    --bg-gradient: #E7E2D8;
+    --panel: #F4F0E8;
+    --panel-strong: #EDE8DE;
+    --card: #F4F0E8;
+    --card-hover: #FAF6EE;
+    --border: #DCD6CA;
+    --border-soft: #E8E1D6;
+    --text: #2C2A26;
+    --text-muted: #6E695E;
+    --text-faint: #9E988C;
+    --accent: #C2982F;
+    --accent-soft: rgba(194, 152, 47, 0.16);
+    --accent-strong: #D7B14A;
+    --danger: #BE5A41;
+    --danger-soft: rgba(190, 90, 65, 0.12);
+    --success: #87A987;
+    --warning: #B89762;
+    --shadow: 0 18px 38px rgba(150, 138, 116, 0.24);
+    --chip-bg: #EDE8DE;
+    --button-bg: #F4F0E8;
+    --button-border: #DCD6CA;
+    --surface: var(--panel);
+    --surface-solid: var(--panel-strong);
+    --border-strong: #C7C0B2;
+    --text-dim: var(--text-muted);
+    --text-light: var(--text-faint);
+    --accent-light: var(--accent-strong);
+    --accent-glow: rgba(194, 152, 47, 0.22);
+    --positive: var(--success);
+    --negative: var(--danger);
+    --shadow-light: rgba(255, 253, 247, 0.9);
+    --shadow-dark: rgba(150, 138, 116, 0.40);
+    --shadow-dark-subtle: rgba(150, 138, 116, 0.22);
+    --lcd: #C7C9BC;
+    --lcd-text: #25271E;
+    --lcd-dim: #5B5D4F;
+    --lcd-glow: rgba(37, 39, 30, 0.18);
+  }
+
+  html[data-theme="cattea-gold-black"] {
+    --bg: #080808;
+    --bg-soft: #101112;
+    --bg-gradient: #080808;
+    --panel: #151617;
+    --panel-strong: #1C1D1F;
+    --card: #202123;
+    --card-hover: #28292B;
+    --border: #3F3A30;
+    --border-soft: #2D2B27;
+    --text: #F2EDE2;
+    --text-muted: #BDB6AA;
+    --text-faint: #7F7A72;
+    --accent: #C8A96A;
+    --accent-soft: rgba(200, 169, 106, 0.16);
+    --accent-strong: #E0C482;
+    --danger: #C9857E;
+    --danger-soft: rgba(201, 133, 126, 0.14);
+    --success: #A9B58E;
+    --warning: #C2A56C;
+    --shadow: 0 18px 44px rgba(0, 0, 0, 0.52);
+    --chip-bg: rgba(200, 169, 106, 0.10);
+    --button-bg: #202123;
+    --button-border: #484236;
+    --surface: var(--panel);
+    --surface-solid: var(--card);
+    --border-strong: #5C533F;
+    --text-dim: var(--text-muted);
+    --text-light: var(--text-faint);
+    --accent-light: var(--accent-strong);
+    --accent-glow: rgba(200, 169, 106, 0.22);
+    --positive: var(--success);
+    --negative: var(--danger);
+    --shadow-light: rgba(255, 245, 220, 0.04);
+    --shadow-dark: rgba(0, 0, 0, 0.56);
+    --shadow-dark-subtle: rgba(0, 0, 0, 0.32);
+    --lcd: #202421;
+    --lcd-text: #D9D2BE;
+    --lcd-dim: #8D877A;
+    --lcd-glow: rgba(200, 169, 106, 0.14);
+  }
+
+  html[data-theme="cc-gold-brown"] {
+    --bg: #17100C;
+    --bg-soft: #211811;
+    --bg-gradient: #17100C;
+    --panel: #2A1D15;
+    --panel-strong: #332319;
+    --card: #3A2A20;
+    --card-hover: #443126;
+    --border: #5B4630;
+    --border-soft: #473523;
+    --text: #F7EBD7;
+    --text-muted: #D2BFA5;
+    --text-faint: #9B836B;
+    --accent: #D8AA57;
+    --accent-soft: rgba(216, 170, 87, 0.16);
+    --accent-strong: #E8C174;
+    --danger: #D08A74;
+    --danger-soft: rgba(208, 138, 116, 0.14);
+    --success: #B4BA82;
+    --warning: #D0A15D;
+    --shadow: 0 18px 44px rgba(10, 5, 2, 0.50);
+    --chip-bg: rgba(216, 170, 87, 0.10);
+    --button-bg: #3A2A20;
+    --button-border: #654C32;
+    --surface: var(--panel);
+    --surface-solid: var(--card);
+    --border-strong: #74583A;
+    --text-dim: var(--text-muted);
+    --text-light: var(--text-faint);
+    --accent-light: var(--accent-strong);
+    --accent-glow: rgba(216, 170, 87, 0.22);
+    --positive: var(--success);
+    --negative: var(--danger);
+    --shadow-light: rgba(255, 239, 210, 0.045);
+    --shadow-dark: rgba(0, 0, 0, 0.50);
+    --shadow-dark-subtle: rgba(0, 0, 0, 0.30);
+    --lcd: #30281E;
+    --lcd-text: #E4D6BD;
+    --lcd-dim: #A08C74;
+    --lcd-glow: rgba(216, 170, 87, 0.14);
+  }
+
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
-    font-family: 'Share Tech Mono', 'Noto Sans SC', system-ui, sans-serif;
+    font-family: var(--font-ui);
     font-weight: 400;
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
     line-height: 1.75;
-    letter-spacing: 0.02em;
+    letter-spacing: 0;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -99,6 +279,40 @@
     align-items: center;
     gap: 6px;
     margin-left: 6px;
+  }
+  .theme-picker {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--button-border);
+    border-radius: 12px;
+    background: var(--button-bg);
+    color: var(--text-muted);
+    box-shadow: 3px 3px 7px var(--shadow-dark-subtle), -3px -3px 6px var(--shadow-light);
+    flex-shrink: 0;
+  }
+  .theme-picker i {
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+  .theme-picker select {
+    min-width: 150px;
+    height: 28px;
+    padding: 0 26px 0 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    color: var(--text) !important;
+    font-family: var(--font-ui) !important;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .theme-picker select:focus {
+    outline: none;
+    box-shadow: none !important;
   }
   .search-bar {
     margin-left: auto;
@@ -1057,12 +1271,12 @@
   #network-terminal::before { content:'> '; color: var(--accent); }
   /* 工程网格星图模式 */
   #network-canvas.star-active {
-    background: #EBE6D9 !important;
+    background: var(--bg-soft) !important;
     background-image: none !important;
   }
   #network-terminal.star-active {
-    background: #EBE6D9;
-    color: rgba(90,82,62,0.65);
+    background: var(--bg-soft);
+    color: var(--text-muted);
     text-shadow: none;
   }
   #network-terminal.star-active::before { color: rgba(180,138,40,0.8); }
@@ -2213,6 +2427,206 @@
       max-width: 100%;
     }
   }
+  /* ====== Theme system + readable typography overrides ====== */
+  body,
+  input,
+  select,
+  textarea,
+  button {
+    font-family: var(--font-ui) !important;
+  }
+
+  .header {
+    background: color-mix(in srgb, var(--panel) 92%, transparent) !important;
+    border-bottom: 1px solid var(--border-soft) !important;
+    box-shadow: var(--shadow) !important;
+    flex-wrap: wrap;
+  }
+  .header h1 {
+    font-family: var(--font-display) !important;
+    color: var(--text) !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+    font-size: 25px !important;
+    line-height: 1.1;
+  }
+  .header .stats,
+  .header .version-badge {
+    font-family: var(--font-ui) !important;
+    letter-spacing: 0 !important;
+  }
+  .theme-picker select,
+  .theme-picker select:focus {
+    min-width: 150px;
+    height: 28px;
+    padding: 0 26px 0 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    color: var(--text) !important;
+    font-family: var(--font-ui) !important;
+    font-size: 12px !important;
+    line-height: 1 !important;
+  }
+
+  .tabs {
+    background: color-mix(in srgb, var(--panel-strong) 90%, transparent) !important;
+    border: 1px solid var(--border-soft) !important;
+    box-shadow: inset 0 1px 0 var(--shadow-light), var(--shadow) !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tab {
+    font-family: var(--font-ui) !important;
+    letter-spacing: 0 !important;
+    background: var(--button-bg) !important;
+    color: var(--text-muted) !important;
+    border: 1px solid var(--button-border) !important;
+    min-width: 94px;
+  }
+  .tab > span:first-child {
+    font-family: var(--font-ui) !important;
+    font-size: 13px;
+    font-weight: 650;
+    letter-spacing: 0 !important;
+    line-height: 1.25;
+  }
+  .tab .tab-en {
+    font-family: var(--font-ui) !important;
+    font-size: 10px;
+    font-style: normal !important;
+    font-weight: 500;
+    letter-spacing: 0.02em !important;
+    color: var(--text-faint) !important;
+    line-height: 1.2;
+  }
+  .tab:hover {
+    color: var(--text) !important;
+    background: var(--card-hover) !important;
+  }
+  .tab.active {
+    color: var(--accent) !important;
+    background: color-mix(in srgb, var(--accent) 12%, var(--button-bg)) !important;
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 2px var(--accent-soft), 4px 4px 11px var(--shadow-dark-subtle), -4px -4px 9px var(--shadow-light) !important;
+  }
+  .tab.active .tab-en {
+    color: var(--accent-strong) !important;
+  }
+
+  .bucket-row,
+  .config-section,
+  .breath-info,
+  .breath-flow,
+  .tool-card,
+  .self-panel,
+  .self-entry,
+  .review-card,
+  .review-detail-shell,
+  .review-raw-details,
+  .detail-panel {
+    background: var(--card) !important;
+    border-color: var(--border-soft) !important;
+  }
+  .bucket-row:hover,
+  .review-card:hover {
+    background: var(--card-hover) !important;
+  }
+  .config-section h3,
+  .review-detail-section h4,
+  .detail-panel h2 {
+    font-family: var(--font-ui) !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+  }
+
+  .review-id,
+  .review-meta-pill,
+  .review-field-key,
+  .bucket-row .score,
+  .bucket-row .time,
+  .self-entry-aspect,
+  .self-entry-time,
+  #heartbeat-indicator,
+  #anchor-counter,
+  .lcd-type,
+  pre,
+  code {
+    font-family: var(--font-mono) !important;
+  }
+  .review-card-title,
+  .review-card-summary,
+  .review-body-pre,
+  .review-field-value,
+  .self-entry-content,
+  .tool-card .meta .d,
+  #settings-view,
+  #logs-view,
+  #import-view {
+    font-family: var(--font-ui) !important;
+    letter-spacing: 0 !important;
+  }
+  .review-meta-pill,
+  .review-field-key {
+    color: var(--text-faint) !important;
+  }
+  .review-id,
+  .review-raw-details summary {
+    color: var(--accent) !important;
+  }
+  .review-body-pre,
+  .review-raw-details {
+    background: var(--panel-strong) !important;
+    border: 1px solid var(--border-soft) !important;
+  }
+
+  .btn-primary,
+  .breath-controls button,
+  button[style*="background:var(--accent)"] {
+    color: var(--bg) !important;
+  }
+  .btn-danger,
+  .review-danger-action {
+    color: var(--danger) !important;
+    border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent) !important;
+    background: var(--danger-soft) !important;
+  }
+  .btn-danger:hover,
+  .review-danger-action:hover {
+    color: var(--bg) !important;
+    background: var(--danger) !important;
+  }
+
+  .domain-pill,
+  .review-meta-pill,
+  .self-entry-aspect {
+    background: var(--chip-bg) !important;
+    border: 1px solid var(--border-soft);
+  }
+
+  @media (max-width: 768px) {
+    .header {
+      align-items: stretch;
+    }
+    .theme-picker {
+      width: max-content;
+      max-width: 100%;
+    }
+    .theme-picker select {
+      min-width: 138px;
+    }
+    .tab {
+      min-width: 92px;
+      padding: 10px 12px 8px !important;
+    }
+    .tab > span:first-child {
+      font-size: 13px;
+    }
+    .tab .tab-en {
+      font-size: 10px;
+    }
+  }
 </style>
 </head>
 <body>
@@ -2260,6 +2674,15 @@
     <button onclick="doSearch()" title="搜索"><i data-lucide="search"></i></button>
   </div>
   <div class="header-actions">
+    <label class="theme-picker" title="Dashboard theme">
+      <i data-lucide="palette" style="width:14px;height:14px;"></i>
+      <select id="theme-select" aria-label="Dashboard theme" onchange="setDashboardTheme(this.value)">
+        <option value="ombre-original">Ombre Original</option>
+        <option value="umi-purple">Umi Purple</option>
+        <option value="cattea-gold-black">Cattea Gold Black</option>
+        <option value="cc-gold-brown">CC Gold Brown</option>
+      </select>
+    </label>
     <button onclick="openFeedback()" title="给作者反馈" style="height:32px;padding:0 12px;gap:5px;display:inline-flex;align-items:center;white-space:nowrap;font-size:12px;"><i data-lucide="message-circle"></i> 反馈</button>
     <button onclick="doLogout()" title="退出登录" style="height:32px;padding:0 12px;gap:5px;display:inline-flex;align-items:center;white-space:nowrap;font-size:12px;"><i data-lucide="log-out"></i> 退出</button>
   </div>
@@ -4302,6 +4725,11 @@ const BASE = '';
 let allBuckets = [];
 let currentFilter = 'all';
 
+function cssVar(name, fallback) {
+  var value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
+}
+
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -4727,9 +5155,9 @@ async function loadNetwork() {
   ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
   var W = canvas.offsetWidth, H = canvas.offsetHeight;
 
-  ctx.fillStyle = '#C7C9BC';
+  ctx.fillStyle = cssVar('--lcd', '#C7C9BC');
   ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#5B5D4F';
+  ctx.fillStyle = cssVar('--lcd-dim', '#5B5D4F');
   ctx.font = "14px 'Share Tech Mono', monospace";
   ctx.textAlign = 'center';
   ctx.fillText('LOADING MEMORY NET…', W / 2, H / 2);
@@ -4749,7 +5177,7 @@ async function loadNetwork() {
     var _n = (networkData.nodes || []).length, _e = (networkData.edges || networkData.links || []).length;
     setNetTerminal('ONLINE · ' + _n + ' nodes / ' + _e + ' links · mode=' + mode);
   } catch (e) {
-    ctx.fillStyle = '#5B5D4F';
+    ctx.fillStyle = cssVar('--lcd-dim', '#5B5D4F');
     ctx.textAlign = 'center';
     ctx.fillText('LOAD FAILED: ' + e.message, W / 2, H / 2 + 24);
     setNetTerminal('ERROR · ' + e.message);
@@ -5006,7 +5434,7 @@ function animateConceptNetwork(canvas, ctx, W, H, data) {
     var visEdges = allEdges.filter(function (e) { return visible.has(e.source) && visible.has(e.target); });
 
     // ── 静态背景：米色底 + 工程网格 ──
-    ctx.fillStyle = '#EBE6D9';
+    ctx.fillStyle = cssVar('--bg-soft', '#EBE6D9');
     ctx.fillRect(0, 0, W, H);
 
     // 细格
@@ -5208,8 +5636,8 @@ function drawConceptNetwork(ctx, W, H, data) {
 function drawBucketNetwork(ctx, W, H, data) {
   var nodes = data.nodes || [], edges = data.edges || [];
   if (!nodes.length) {
-    ctx.fillStyle = '#C7C9BC'; ctx.fillRect(0,0,W,H);
-    ctx.fillStyle = '#8A8070';
+    ctx.fillStyle = cssVar('--lcd', '#C7C9BC'); ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = cssVar('--lcd-dim', '#8A8070');
     ctx.fillText('没有记忆桶', W/2, H/2);
     return;
   }
@@ -5240,7 +5668,7 @@ function drawBucketNetwork(ctx, W, H, data) {
     });
     nodes.forEach(function(n){var p=positions[n.id]; p.x+=(cx-p.x)*0.01; p.y+=(cy-p.y)*0.01;});
   }
-  ctx.fillStyle='#C7C9BC'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=cssVar('--lcd', '#C7C9BC'); ctx.fillRect(0,0,W,H);
   edges.forEach(function(e){
     var pa=positions[e.source], pb=positions[e.target]; if(!pa||!pb) return;
     var w=e.weight||0.5;
@@ -7647,14 +8075,14 @@ async function pollHeartbeat() {
     const r = await fetch(BASE + '/api/heartbeat');
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
-    dot.style.background = '#3a9b5c';
+    dot.style.background = 'var(--positive)';
     const idle = Math.floor((Date.now()/1000) - (d.last_op_ts || 0));
     var decaying = d.decay_engine === 'running';
     txt.textContent = '在线 · ' + (decaying ? '衰减运行中' : '衰减停');
     txt.title = 'uptime ' + d.uptime_s + 's · 上次活跃 ' + idle + 's 前';
     dot.classList.add('breathing');   // 在线即呼吸，衰减状态只影响文字
   } catch (e) {
-    dot.style.background = '#c45a3a';
+    dot.style.background = 'var(--negative)';
     dot.classList.remove('breathing');
     txt.textContent = '离线';
     txt.title = e.message;
@@ -9033,3 +9461,4 @@ function renderSelfEntries() {
 
 </body>
 </html>
+
