@@ -107,17 +107,17 @@ async def dispatch(
             suggested_type = "feel"
             original_tool = "feel"
             suggested_importance = 5
-            title = "feel 候选"
+            title = ""
         elif pinned:
             suggested_type = "pinned"
             original_tool = "hold"
             suggested_importance = 10
-            title = "pinned 候选"
+            title = ""
         else:
             suggested_type = "bucket"
             original_tool = "hold"
             suggested_importance = importance
-            title = "hold 候选"
+            title = ""
         candidate = await create_pending_candidate(
             original_tool=original_tool,
             suggested_type=suggested_type,

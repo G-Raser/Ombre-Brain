@@ -36,7 +36,7 @@ async def dispatch(content: str) -> str:
         candidate = await create_pending_candidate(
             original_tool="grow",
             suggested_type="bucket",
-            title="grow 候选",
+            title="",
             content=stripped,
             suggested_importance=6,
             tags=[],

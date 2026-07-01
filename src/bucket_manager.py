@@ -34,6 +34,8 @@ import shutil
 import uuid
 from datetime import datetime
 
+_TITLE_TIME_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\s+\d{2}-\d{2}-\d{2}\s+")
+
 # 统一错误体系：越界 clamp 时上报 OB-W001/OB-W002（rule.md §11）
 try:
     from errors import push_warning as _ob_push_warning  # type: ignore
@@ -343,7 +345,11 @@ class BucketManager:
         # 使用连字符替代冒号，避免 sanitize_name 后续编辑时把冒号去掉破坏可读性。
         _ts = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
         _clean = sanitize_name(name) if name else ""
-        bucket_name = (f"{_ts} {_clean}" if (_clean and _clean != "unnamed") else _ts)[:80]
+        if _clean and _clean != "unnamed":
+            bucket_name = _clean if _TITLE_TIME_PREFIX_RE.match(_clean) else f"{_ts} {_clean}"
+        else:
+            bucket_name = _ts
+        bucket_name = bucket_name[:80]
         # feel buckets are allowed to have empty domain; others default to ["未分类"]
         if bucket_type == "feel":
             domain = domain if domain is not None else []

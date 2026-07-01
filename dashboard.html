@@ -10,6 +10,41 @@
 <link rel="manifest" href="/static/manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;500;600&family=Noto+Sans+SC:wght@400;500&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+<script>
+  (function() {
+    var KEY = 'ombre_dashboard_theme';
+    var DEFAULT_THEME = 'umi-purple';
+    var THEMES = {
+      'ombre-original': '#E7E2D8',
+      'umi-purple': '#0C0712',
+      'cattea-gold-black': '#080808',
+      'cc-gold-brown': '#17100C'
+    };
+    function normalizeTheme(value) {
+      return Object.prototype.hasOwnProperty.call(THEMES, value) ? value : DEFAULT_THEME;
+    }
+    window.setDashboardTheme = function(value, persist) {
+      var theme = normalizeTheme(value);
+      document.documentElement.setAttribute('data-theme', theme);
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', THEMES[theme]);
+      if (persist !== false) {
+        try { localStorage.setItem(KEY, theme); } catch (_) {}
+      }
+      var select = document.getElementById('theme-select');
+      if (select && select.value !== theme) select.value = theme;
+      return theme;
+    };
+    window.getDashboardTheme = function() {
+      try { return normalizeTheme(localStorage.getItem(KEY)); } catch (_) { return DEFAULT_THEME; }
+    };
+    window.OMBRE_THEME_STORAGE_KEY = KEY;
+    window.setDashboardTheme(window.getDashboardTheme(), false);
+    document.addEventListener('DOMContentLoaded', function() {
+      window.setDashboardTheme(window.getDashboardTheme(), false);
+    });
+  })();
+</script>
 <style>
   @font-face {
     font-family: 'RRPL';
@@ -20,46 +55,191 @@
   }
 
   :root {
-    /* === 复古掌机 retro-handheld palette — warm cream plastic + pale LCD + gold === */
-    --bg: #E7E2D8;                    /* 外环境米灰（带颗粒感） */
-    --bg-gradient: #E7E2D8;
-    --surface: #F4F0E8;              /* 凸起塑料外壳 */
-    --surface-solid: #EDE8DE;        /* 次级外壳块 */
-    --border: #DCD6CA;                /* 极柔的分隔（几乎无线条感） */
-    --border-strong: #C7C0B2;
-    --text: #2C2A26;                  /* 墨黑 */
-    --text-dim: #6E695E;
-    --text-light: #9E988C;
-    --accent: #C2982F;                /* 暖金（高亮/激活态） */
-    --accent-light: #D7B14A;
-    --accent-glow: rgba(194, 152, 47, 0.22);
-    --positive: #87A987;
-    --negative: #BE5A41;              /* 删除/危险红 */
-    --warning: #B89762;
-    /* 拟物化双向光影：高光（左上）+ 阴影（右下）。原作者把高光设成透明=关闭了立体感，这里点亮。 */
-    --shadow-light: rgba(255, 253, 247, 0.9);
-    --shadow-dark: rgba(150, 138, 116, 0.40);
-    --shadow-dark-subtle: rgba(150, 138, 116, 0.22);
-    /* LCD 点阵屏 */
-    --lcd: #C7C9BC;                   /* 屏底（灰绿单色） */
-    --lcd-text: #25271E;              /* 屏上深字 */
-    --lcd-dim: #5B5D4F;
-    --lcd-glow: rgba(37, 39, 30, 0.18);
+    --font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+    --font-display: "Cormorant Garamond", "Noto Serif SC", Georgia, serif;
+    --font-mono: "SF Mono", "Fira Code", Consolas, "Liberation Mono", Menlo, monospace;
+
+    --bg: #0C0712;
+    --bg-soft: #15101C;
+    --bg-gradient: #0C0712;
+    --panel: #17101F;
+    --panel-strong: #21172C;
+    --card: #221A2B;
+    --card-hover: #2A2135;
+    --border: #3A3047;
+    --border-soft: #2A2334;
+    --text: #F1ECF7;
+    --text-muted: #B7A9C7;
+    --text-faint: #7F728E;
+    --accent: #BFA5FF;
+    --accent-soft: rgba(191, 165, 255, 0.18);
+    --accent-strong: #D7C8FF;
+    --danger: #D98A9B;
+    --danger-soft: rgba(217, 138, 155, 0.15);
+    --success: #A9C7A1;
+    --warning: #C9A874;
+    --shadow: 0 18px 44px rgba(2, 1, 4, 0.45);
+    --chip-bg: rgba(191, 165, 255, 0.10);
+    --button-bg: #241B2E;
+    --button-border: #42364F;
+
+    --surface: var(--panel);
+    --surface-solid: var(--card);
+    --border-strong: #51445F;
+    --text-dim: var(--text-muted);
+    --text-light: var(--text-faint);
+    --accent-light: var(--accent-strong);
+    --accent-glow: rgba(191, 165, 255, 0.24);
+    --positive: var(--success);
+    --negative: var(--danger);
+    --shadow-light: rgba(255, 255, 255, 0.045);
+    --shadow-dark: rgba(0, 0, 0, 0.50);
+    --shadow-dark-subtle: rgba(0, 0, 0, 0.28);
+    --lcd: #1F2630;
+    --lcd-text: #D8E2D1;
+    --lcd-dim: #8D9A8A;
+    --lcd-glow: rgba(191, 165, 255, 0.16);
     --shell-radius: 24px;
     --radius-inner: 16px;
     --radius-control: 12px;
   }
 
+  html[data-theme="ombre-original"] {
+    --bg: #E7E2D8;
+    --bg-soft: #EFE9DE;
+    --bg-gradient: #E7E2D8;
+    --panel: #F4F0E8;
+    --panel-strong: #EDE8DE;
+    --card: #F4F0E8;
+    --card-hover: #FAF6EE;
+    --border: #DCD6CA;
+    --border-soft: #E8E1D6;
+    --text: #2C2A26;
+    --text-muted: #6E695E;
+    --text-faint: #9E988C;
+    --accent: #C2982F;
+    --accent-soft: rgba(194, 152, 47, 0.16);
+    --accent-strong: #D7B14A;
+    --danger: #BE5A41;
+    --danger-soft: rgba(190, 90, 65, 0.12);
+    --success: #87A987;
+    --warning: #B89762;
+    --shadow: 0 18px 38px rgba(150, 138, 116, 0.24);
+    --chip-bg: #EDE8DE;
+    --button-bg: #F4F0E8;
+    --button-border: #DCD6CA;
+    --surface: var(--panel);
+    --surface-solid: var(--panel-strong);
+    --border-strong: #C7C0B2;
+    --text-dim: var(--text-muted);
+    --text-light: var(--text-faint);
+    --accent-light: var(--accent-strong);
+    --accent-glow: rgba(194, 152, 47, 0.22);
+    --positive: var(--success);
+    --negative: var(--danger);
+    --shadow-light: rgba(255, 253, 247, 0.9);
+    --shadow-dark: rgba(150, 138, 116, 0.40);
+    --shadow-dark-subtle: rgba(150, 138, 116, 0.22);
+    --lcd: #C7C9BC;
+    --lcd-text: #25271E;
+    --lcd-dim: #5B5D4F;
+    --lcd-glow: rgba(37, 39, 30, 0.18);
+  }
+
+  html[data-theme="cattea-gold-black"] {
+    --bg: #080808;
+    --bg-soft: #101112;
+    --bg-gradient: #080808;
+    --panel: #151617;
+    --panel-strong: #1C1D1F;
+    --card: #202123;
+    --card-hover: #28292B;
+    --border: #3F3A30;
+    --border-soft: #2D2B27;
+    --text: #F2EDE2;
+    --text-muted: #BDB6AA;
+    --text-faint: #7F7A72;
+    --accent: #C8A96A;
+    --accent-soft: rgba(200, 169, 106, 0.16);
+    --accent-strong: #E0C482;
+    --danger: #C9857E;
+    --danger-soft: rgba(201, 133, 126, 0.14);
+    --success: #A9B58E;
+    --warning: #C2A56C;
+    --shadow: 0 18px 44px rgba(0, 0, 0, 0.52);
+    --chip-bg: rgba(200, 169, 106, 0.10);
+    --button-bg: #202123;
+    --button-border: #484236;
+    --surface: var(--panel);
+    --surface-solid: var(--card);
+    --border-strong: #5C533F;
+    --text-dim: var(--text-muted);
+    --text-light: var(--text-faint);
+    --accent-light: var(--accent-strong);
+    --accent-glow: rgba(200, 169, 106, 0.22);
+    --positive: var(--success);
+    --negative: var(--danger);
+    --shadow-light: rgba(255, 245, 220, 0.04);
+    --shadow-dark: rgba(0, 0, 0, 0.56);
+    --shadow-dark-subtle: rgba(0, 0, 0, 0.32);
+    --lcd: #202421;
+    --lcd-text: #D9D2BE;
+    --lcd-dim: #8D877A;
+    --lcd-glow: rgba(200, 169, 106, 0.14);
+  }
+
+  html[data-theme="cc-gold-brown"] {
+    --bg: #17100C;
+    --bg-soft: #211811;
+    --bg-gradient: #17100C;
+    --panel: #2A1D15;
+    --panel-strong: #332319;
+    --card: #3A2A20;
+    --card-hover: #443126;
+    --border: #5B4630;
+    --border-soft: #473523;
+    --text: #F7EBD7;
+    --text-muted: #D2BFA5;
+    --text-faint: #9B836B;
+    --accent: #D8AA57;
+    --accent-soft: rgba(216, 170, 87, 0.16);
+    --accent-strong: #E8C174;
+    --danger: #D08A74;
+    --danger-soft: rgba(208, 138, 116, 0.14);
+    --success: #B4BA82;
+    --warning: #D0A15D;
+    --shadow: 0 18px 44px rgba(10, 5, 2, 0.50);
+    --chip-bg: rgba(216, 170, 87, 0.10);
+    --button-bg: #3A2A20;
+    --button-border: #654C32;
+    --surface: var(--panel);
+    --surface-solid: var(--card);
+    --border-strong: #74583A;
+    --text-dim: var(--text-muted);
+    --text-light: var(--text-faint);
+    --accent-light: var(--accent-strong);
+    --accent-glow: rgba(216, 170, 87, 0.22);
+    --positive: var(--success);
+    --negative: var(--danger);
+    --shadow-light: rgba(255, 239, 210, 0.045);
+    --shadow-dark: rgba(0, 0, 0, 0.50);
+    --shadow-dark-subtle: rgba(0, 0, 0, 0.30);
+    --lcd: #30281E;
+    --lcd-text: #E4D6BD;
+    --lcd-dim: #A08C74;
+    --lcd-glow: rgba(216, 170, 87, 0.14);
+  }
+
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
-    font-family: 'Share Tech Mono', 'Noto Sans SC', system-ui, sans-serif;
+    font-family: var(--font-ui);
     font-weight: 400;
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
     line-height: 1.75;
-    letter-spacing: 0.02em;
+    letter-spacing: 0;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -99,6 +279,40 @@
     align-items: center;
     gap: 6px;
     margin-left: 6px;
+  }
+  .theme-picker {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--button-border);
+    border-radius: 12px;
+    background: var(--button-bg);
+    color: var(--text-muted);
+    box-shadow: 3px 3px 7px var(--shadow-dark-subtle), -3px -3px 6px var(--shadow-light);
+    flex-shrink: 0;
+  }
+  .theme-picker i {
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+  .theme-picker select {
+    min-width: 150px;
+    height: 28px;
+    padding: 0 26px 0 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    color: var(--text) !important;
+    font-family: var(--font-ui) !important;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .theme-picker select:focus {
+    outline: none;
+    box-shadow: none !important;
   }
   .search-bar {
     margin-left: auto;
@@ -1057,12 +1271,12 @@
   #network-terminal::before { content:'> '; color: var(--accent); }
   /* 工程网格星图模式 */
   #network-canvas.star-active {
-    background: #EBE6D9 !important;
+    background: var(--bg-soft) !important;
     background-image: none !important;
   }
   #network-terminal.star-active {
-    background: #EBE6D9;
-    color: rgba(90,82,62,0.65);
+    background: var(--bg-soft);
+    color: var(--text-muted);
     text-shadow: none;
   }
   #network-terminal.star-active::before { color: rgba(180,138,40,0.8); }
@@ -1582,6 +1796,7 @@
     right: 0;
     top: 0;
     width: 460px;
+    max-width: 100vw;
     height: 100vh;
     background: var(--surface-solid);
     z-index: 300;
@@ -1665,6 +1880,7 @@
   .self-panel-body {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 16px 24px 32px;
     display: flex;
     flex-direction: column;
@@ -1678,11 +1894,14 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+    min-width: 0;
   }
   .self-entry-meta {
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
+    min-width: 0;
   }
   .self-entry-aspect {
     font-family: 'Share Tech Mono', monospace;
@@ -1705,6 +1924,9 @@
     line-height: 1.75;
     color: var(--text);
     white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: normal;
+    min-width: 0;
   }
   .self-panel-empty {
     text-align: center;
@@ -1724,6 +1946,687 @@
     transition: opacity 0.3s;
   }
   .self-overlay.show { opacity: 1; pointer-events: auto; }
+
+  .review-area-tabs,
+  .review-card-actions,
+  .review-detail-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .review-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    background: var(--surface);
+    box-shadow: inset 1px 1px 0 rgba(255,255,255,0.35);
+  }
+  .review-card-inner {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+  .review-card-main {
+    min-width: 0;
+    flex: 1;
+  }
+  .review-pill-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .review-id {
+    font-size: 11px;
+    color: var(--accent);
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .review-meta-pill {
+    font-size: 11px;
+    color: var(--text-dim);
+    overflow-wrap: anywhere;
+  }
+  .review-card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .review-card-grid,
+  .review-detail-summary-grid,
+  .review-source-grid,
+  .review-raw-grid {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    gap: 6px 10px;
+    font-size: 12px;
+    line-height: 1.7;
+  }
+  .review-card-grid {
+    grid-template-columns: 130px minmax(0, 1fr);
+    color: var(--text-dim);
+  }
+  .review-field-key {
+    color: var(--text-dim);
+  }
+  .review-card-grid .review-detail-field,
+  .review-detail-summary-grid .review-detail-field,
+  .review-source-grid .review-detail-field,
+  .review-raw-grid .review-detail-field {
+    display: contents;
+  }
+  .review-field-value {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .review-card-summary {
+    display: -webkit-box;
+    -webkit-line-clamp: 5;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.7;
+    margin-top: 8px;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+  }
+  .review-card-actions {
+    justify-content: flex-end;
+    min-width: 220px;
+  }
+  .review-detail-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+  }
+  .review-detail-section {
+    min-width: 0;
+  }
+  .review-detail-section h4 {
+    margin: 0 0 8px;
+    color: var(--text);
+    line-height: 1.3;
+  }
+  .review-body-pre {
+    width: 100%;
+    box-sizing: border-box;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: normal;
+    background: var(--surface-solid);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    max-height: 420px;
+    overflow: auto;
+    font-size: 13px;
+    line-height: 1.75;
+  }
+  .review-raw-details {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: var(--surface-solid);
+  }
+  .review-raw-details summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-size: 12px;
+    user-select: none;
+  }
+  .review-raw-grid {
+    margin-top: 10px;
+  }
+  .review-detail-actions {
+    justify-content: flex-end;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+  }
+
+  @media (max-width: 768px) {
+    html, body {
+      overflow-x: hidden;
+    }
+
+    .header {
+      padding: 12px;
+      gap: 8px;
+    }
+    .header h1 {
+      flex: 1 1 100%;
+    }
+    .header-meta,
+    .header-actions,
+    .search-bar {
+      width: 100%;
+    }
+    .header-actions {
+      overflow-x: auto;
+      padding-bottom: 4px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .tabs {
+      margin: 8px 0;
+      padding: 8px 12px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      flex-wrap: nowrap !important;
+      justify-content: flex-start;
+      scroll-snap-type: x proximity;
+      -webkit-overflow-scrolling: touch;
+    }
+    .tab {
+      flex: 0 0 auto !important;
+      min-width: 96px;
+      max-width: none !important;
+      padding: 10px 14px 8px;
+      scroll-snap-align: start;
+      touch-action: manipulation;
+    }
+
+    .self-fab {
+      width: 48px;
+      height: 48px;
+      left: 14px;
+      bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    }
+    .self-fab .fab-label {
+      font-size: 24px;
+      letter-spacing: 0;
+    }
+    .self-panel {
+      width: calc(100vw - 20px);
+      max-width: calc(100vw - 20px);
+      height: calc(100dvh - 20px);
+      max-height: calc(100dvh - 20px);
+      top: 10px;
+      right: 10px;
+      border-radius: 14px;
+      overflow: hidden;
+      box-sizing: border-box;
+      box-shadow: 0 10px 34px rgba(44,42,38,0.28);
+    }
+    .self-panel-header {
+      padding: 14px 14px 12px;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .self-panel-title {
+      font-size: 24px;
+      line-height: 1.1;
+    }
+    .self-panel-subtitle {
+      font-size: 10px;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+    .self-panel-close {
+      width: 42px;
+      height: 42px;
+      margin-top: -4px;
+    }
+    .self-panel-filters {
+      padding: 10px 12px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      gap: 8px;
+    }
+    .self-filter-btn {
+      flex: 0 0 auto;
+      min-height: 40px;
+      padding: 8px 12px;
+      font-size: 12px;
+      max-width: min(58vw, 180px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      touch-action: manipulation;
+    }
+    .self-panel-body {
+      padding: 12px 12px calc(18px + env(safe-area-inset-bottom, 0px));
+      gap: 12px;
+      overflow-x: hidden;
+    }
+    .self-entry {
+      padding: 14px 13px;
+      border-radius: 8px;
+      gap: 10px;
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+    .self-entry-meta {
+      align-items: flex-start;
+      gap: 7px;
+    }
+    .self-entry-aspect {
+      max-width: 100%;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      line-height: 1.35;
+      font-size: 11px;
+      letter-spacing: 0.4px;
+      padding: 4px 8px;
+    }
+    .self-entry-time {
+      margin-left: 0;
+      width: 100%;
+      font-size: 11px;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+    .self-entry-content {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 15px;
+      line-height: 1.78;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+      word-break: normal;
+    }
+    .self-panel-empty {
+      padding: 36px 12px;
+      font-size: 14px;
+      line-height: 1.7;
+      overflow-wrap: break-word;
+    }
+
+    .content {
+      padding: 14px 10px;
+      overflow-x: hidden;
+    }
+    .bucket-row,
+    .config-section,
+    .sub-card,
+    .breath-info,
+    .breath-flow,
+    .stat-card,
+    .plan-card,
+    .letter-card,
+    .anchor-card,
+    .review-card {
+      max-width: 100%;
+      overflow-wrap: anywhere;
+    }
+    #review-view .config-section {
+      padding: 14px 12px;
+    }
+    #review-detail-panel {
+      width: calc(100vw - 24px);
+      max-width: calc(100vw - 24px);
+      margin-left: auto;
+      margin-right: auto;
+      box-sizing: border-box;
+      overflow: visible;
+    }
+    #review-detail {
+      font-size: 14px !important;
+      line-height: 1.75 !important;
+      width: 100%;
+      min-width: 0;
+    }
+    .review-area-tabs {
+      overflow-x: auto;
+      flex-wrap: nowrap;
+      padding-bottom: 4px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .review-area-tabs button {
+      flex: 0 0 auto;
+    }
+    .review-card {
+      padding: 12px;
+    }
+    .review-card-inner,
+    .review-card-main,
+    .review-card-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      width: 100%;
+      min-width: 0;
+    }
+    .review-card-grid,
+    .review-detail-summary-grid,
+    .review-source-grid,
+    .review-raw-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .review-card-grid .review-detail-field,
+    .review-detail-summary-grid .review-detail-field,
+    .review-source-grid .review-detail-field,
+    .review-raw-grid .review-detail-field,
+    .review-detail-field {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .review-field-key {
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .review-field-value {
+      font-size: 14px;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .review-card-summary {
+      -webkit-line-clamp: 4;
+      font-size: 13px;
+      line-height: 1.65;
+      overflow-wrap: break-word;
+    }
+    .review-detail-section h4 {
+      font-size: 15px;
+      line-height: 1.35;
+      white-space: normal;
+    }
+    .review-body-pre {
+      width: 100%;
+      max-height: 48vh;
+      font-size: 15px;
+      line-height: 1.75;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+      word-break: normal;
+    }
+    .review-raw-details {
+      padding: 10px;
+    }
+    .review-detail-actions {
+      position: static;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .review-detail-actions button,
+    .review-card-actions button {
+      width: 100%;
+      min-height: 44px;
+      justify-content: center;
+    }
+    .review-danger-action {
+      margin-top: 8px;
+    }
+    .bucket-row-top,
+    .bucket-row-bottom,
+    .detail-actions,
+    .review-actions,
+    .review-tabs,
+    .breath-controls,
+    .form-row,
+    .config-row {
+      flex-wrap: wrap;
+    }
+    .form-row,
+    .config-row {
+      align-items: stretch !important;
+    }
+    .form-row label,
+    .config-row label {
+      width: 100%;
+    }
+
+    input,
+    select,
+    textarea,
+    button {
+      max-width: 100%;
+    }
+    button,
+    .btn-primary,
+    .btn-secondary,
+    .btn-danger,
+    .icon-btn,
+    .filter-btn {
+      min-height: 42px;
+      touch-action: manipulation;
+    }
+
+    .detail-panel {
+      width: calc(100vw - 16px);
+      right: 8px;
+      top: 8px;
+      height: calc(100vh - 16px);
+      overflow-y: auto;
+    }
+    .detail-content,
+    #review-detail,
+    #review-detail pre,
+    pre,
+    code {
+      max-width: 100%;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    table {
+      display: block;
+      max-width: 100%;
+      overflow-x: auto;
+    }
+    canvas,
+    svg {
+      max-width: 100%;
+    }
+  }
+  /* ====== Theme system + readable typography overrides ====== */
+  body,
+  input,
+  select,
+  textarea,
+  button {
+    font-family: var(--font-ui) !important;
+  }
+
+  .header {
+    background: color-mix(in srgb, var(--panel) 92%, transparent) !important;
+    border-bottom: 1px solid var(--border-soft) !important;
+    box-shadow: var(--shadow) !important;
+    flex-wrap: wrap;
+  }
+  .header h1 {
+    font-family: var(--font-display) !important;
+    color: var(--text) !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+    font-size: 25px !important;
+    line-height: 1.1;
+  }
+  .header .stats,
+  .header .version-badge {
+    font-family: var(--font-ui) !important;
+    letter-spacing: 0 !important;
+  }
+  .theme-picker select,
+  .theme-picker select:focus {
+    min-width: 150px;
+    height: 28px;
+    padding: 0 26px 0 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    color: var(--text) !important;
+    font-family: var(--font-ui) !important;
+    font-size: 12px !important;
+    line-height: 1 !important;
+  }
+
+  .tabs {
+    background: color-mix(in srgb, var(--panel-strong) 90%, transparent) !important;
+    border: 1px solid var(--border-soft) !important;
+    box-shadow: inset 0 1px 0 var(--shadow-light), var(--shadow) !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tab {
+    font-family: var(--font-ui) !important;
+    letter-spacing: 0 !important;
+    background: var(--button-bg) !important;
+    color: var(--text-muted) !important;
+    border: 1px solid var(--button-border) !important;
+    min-width: 94px;
+  }
+  .tab > span:first-child {
+    font-family: var(--font-ui) !important;
+    font-size: 13px;
+    font-weight: 650;
+    letter-spacing: 0 !important;
+    line-height: 1.25;
+  }
+  .tab .tab-en {
+    font-family: var(--font-ui) !important;
+    font-size: 10px;
+    font-style: normal !important;
+    font-weight: 500;
+    letter-spacing: 0.02em !important;
+    color: var(--text-faint) !important;
+    line-height: 1.2;
+  }
+  .tab:hover {
+    color: var(--text) !important;
+    background: var(--card-hover) !important;
+  }
+  .tab.active {
+    color: var(--accent) !important;
+    background: color-mix(in srgb, var(--accent) 12%, var(--button-bg)) !important;
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 2px var(--accent-soft), 4px 4px 11px var(--shadow-dark-subtle), -4px -4px 9px var(--shadow-light) !important;
+  }
+  .tab.active .tab-en {
+    color: var(--accent-strong) !important;
+  }
+
+  .bucket-row,
+  .config-section,
+  .breath-info,
+  .breath-flow,
+  .tool-card,
+  .self-panel,
+  .self-entry,
+  .review-card,
+  .review-detail-shell,
+  .review-raw-details,
+  .detail-panel {
+    background: var(--card) !important;
+    border-color: var(--border-soft) !important;
+  }
+  .bucket-row:hover,
+  .review-card:hover {
+    background: var(--card-hover) !important;
+  }
+  .config-section h3,
+  .review-detail-section h4,
+  .detail-panel h2 {
+    font-family: var(--font-ui) !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+  }
+
+  .review-id,
+  .review-meta-pill,
+  .review-field-key,
+  .bucket-row .score,
+  .bucket-row .time,
+  .self-entry-aspect,
+  .self-entry-time,
+  #heartbeat-indicator,
+  #anchor-counter,
+  .lcd-type,
+  pre,
+  code {
+    font-family: var(--font-mono) !important;
+  }
+  .review-card-title,
+  .review-card-summary,
+  .review-body-pre,
+  .review-field-value,
+  .self-entry-content,
+  .tool-card .meta .d,
+  #settings-view,
+  #logs-view,
+  #import-view {
+    font-family: var(--font-ui) !important;
+    letter-spacing: 0 !important;
+  }
+  .review-meta-pill,
+  .review-field-key {
+    color: var(--text-faint) !important;
+  }
+  .review-id,
+  .review-raw-details summary {
+    color: var(--accent) !important;
+  }
+  .review-body-pre,
+  .review-raw-details {
+    background: var(--panel-strong) !important;
+    border: 1px solid var(--border-soft) !important;
+  }
+
+  .btn-primary,
+  .breath-controls button,
+  button[style*="background:var(--accent)"] {
+    color: var(--bg) !important;
+  }
+  .btn-danger,
+  .review-danger-action {
+    color: var(--danger) !important;
+    border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent) !important;
+    background: var(--danger-soft) !important;
+  }
+  .btn-danger:hover,
+  .review-danger-action:hover {
+    color: var(--bg) !important;
+    background: var(--danger) !important;
+  }
+
+  .domain-pill,
+  .review-meta-pill,
+  .self-entry-aspect {
+    background: var(--chip-bg) !important;
+    border: 1px solid var(--border-soft);
+  }
+
+  @media (max-width: 768px) {
+    .header {
+      align-items: stretch;
+    }
+    .theme-picker {
+      width: max-content;
+      max-width: 100%;
+    }
+    .theme-picker select {
+      min-width: 138px;
+    }
+    .tab {
+      min-width: 92px;
+      padding: 10px 12px 8px !important;
+    }
+    .tab > span:first-child {
+      font-size: 13px;
+    }
+    .tab .tab-en {
+      font-size: 10px;
+    }
+  }
 </style>
 </head>
 <body>
@@ -1771,6 +2674,15 @@
     <button onclick="doSearch()" title="搜索"><i data-lucide="search"></i></button>
   </div>
   <div class="header-actions">
+    <label class="theme-picker" title="Dashboard theme">
+      <i data-lucide="palette" style="width:14px;height:14px;"></i>
+      <select id="theme-select" aria-label="Dashboard theme" onchange="setDashboardTheme(this.value)">
+        <option value="ombre-original">Ombre Original</option>
+        <option value="umi-purple">Umi Purple</option>
+        <option value="cattea-gold-black">Cattea Gold Black</option>
+        <option value="cc-gold-brown">CC Gold Brown</option>
+      </select>
+    </label>
     <button onclick="openFeedback()" title="给作者反馈" style="height:32px;padding:0 12px;gap:5px;display:inline-flex;align-items:center;white-space:nowrap;font-size:12px;"><i data-lucide="message-circle"></i> 反馈</button>
     <button onclick="doLogout()" title="退出登录" style="height:32px;padding:0 12px;gap:5px;display:inline-flex;align-items:center;white-space:nowrap;font-size:12px;"><i data-lucide="log-out"></i> 退出</button>
   </div>
@@ -1785,6 +2697,7 @@
   <div class="tab" data-tab="letters"><span>信</span><span class="tab-en">Letters</span></div>
   <div class="tab" data-tab="anchors"><span>锚点</span><span class="tab-en">Anchors</span></div>
   <div class="tab" data-tab="import"><span>导入</span><span class="tab-en">Import</span></div>
+  <div class="tab" data-tab="review"><span>审核</span><span class="tab-en">Review</span></div>
   <div class="tab" data-tab="logs"><span>日志</span><span class="tab-en">Logs</span></div>
   <div class="tab" data-tab="settings"><span>设置</span><span class="tab-en">Settings</span></div>
   <div class="tab" data-tab="v3-debug"><span>2.4.0 Debug</span><span class="tab-en">Replay</span></div>
@@ -1977,6 +2890,34 @@
     <h3>高频模式检测</h3>
     <button onclick="detectPatterns()" class="icon-btn"><i data-lucide="activity"></i> 检测高频模式</button>
     <div id="import-patterns" style="margin-top:16px;"></div>
+  </div>
+</div>
+
+<div class="content" id="review-view" style="display:none">
+  <div style="max-width:1080px;margin:0 auto;">
+    <div class="config-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+        <h3 style="margin:0;">审核 / Review</h3>
+        <button class="btn-secondary" onclick="loadReviewQueue()" title="刷新审核队列" style="padding:8px 14px;font-size:12px;display:inline-flex;align-items:center;gap:5px;"><i data-lucide="refresh-cw"></i> 刷新</button>
+      </div>
+      <div class="review-area-tabs" style="margin-bottom:12px;">
+        <button id="review-tab-pending" class="btn-secondary" onclick="setReviewArea('pending')" title="待审核候选" style="padding:7px 12px;font-size:12px;">Pending / 待审核</button>
+        <button id="review-tab-approved" class="btn-secondary" onclick="setReviewArea('approved')" title="已批准候选" style="padding:7px 12px;font-size:12px;">Approved / 已批准</button>
+        <button id="review-tab-rejected" class="btn-secondary" onclick="setReviewArea('rejected')" title="已拒绝候选" style="padding:7px 12px;font-size:12px;">Rejected / 已拒绝</button>
+      </div>
+      <div id="review-meta" style="font-size:12px;color:var(--text-dim);min-height:18px;margin-bottom:10px;"></div>
+      <div id="review-list" style="display:flex;flex-direction:column;gap:10px;">
+        <div class="loading">加载中…</div>
+      </div>
+    </div>
+
+    <div class="config-section" id="review-detail-panel" style="display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
+        <h3 style="margin:0;">候选详情</h3>
+        <button onclick="clearReviewDetail()" title="关闭详情" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="x"></i> 关闭</button>
+      </div>
+      <div id="review-detail" style="font-size:12px;line-height:1.7;color:var(--text);"></div>
+    </div>
   </div>
 </div>
 
@@ -2302,7 +3243,7 @@
             <li>点击 <b>Create a tunnel</b> → 选 <b>Cloudflared</b> → 给 Tunnel 起个名字</li>
             <li>在 "Install connector" 页面，选 <b>Docker</b>，复制命令里 <code>--token</code> 后面那一长串字符（以 <code>eyJ</code> 开头）</li>
             <li>把这串 Token 粘贴到下面输入框，点保存 → 启动</li>
-            <li>回到 Cloudflare，添加 Public Hostname：Domain 填你的域名，Service 填 <code>http://localhost:8000</code>（容器内端口）</li>
+            <li>回到 Cloudflare，添加 Public Hostname：Domain 填你的域名，Service 填容器内服务地址（例如 Docker 网络内的 8000 端口）</li>
           </ol>
         </details>
 
@@ -3780,9 +4721,14 @@ async function readJsonSafe(resp) {
 
 // ========================================
 
-const BASE = location.origin;
+const BASE = '';
 let allBuckets = [];
 let currentFilter = 'all';
+
+function cssVar(name, fallback) {
+  var value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
+}
 
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
@@ -3795,6 +4741,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.getElementById('tools-view').style.display = target === 'tools' ? '' : 'none';
     document.getElementById('plan-view').style.display = target === 'plan' ? '' : 'none';
     document.getElementById('import-view').style.display = target === 'import' ? '' : 'none';
+    document.getElementById('review-view').style.display = target === 'review' ? '' : 'none';
     document.getElementById('logs-view').style.display = target === 'logs' ? '' : 'none';
     document.getElementById('v3-debug-view').style.display = target === 'v3-debug' ? '' : 'none';
     document.getElementById('settings-view').style.display = target === 'settings' ? '' : 'none';
@@ -3806,6 +4753,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     if (target === 'tools') loadToolsPanel();
     if (target === 'plan') loadPlans();
     if (target === 'import') { pollImportStatus(); loadImportResults(); }
+    if (target === 'review') loadReviewQueue();
     if (target === 'logs') { loadLogs(); loadOBErrors(); }
     if (target === 'v3-debug') loadV3Debug();
     if (target === 'settings') {
@@ -4052,6 +5000,7 @@ async function showDetail(id) {
 }
 
 async function bucketPin(id) {
+  if (!confirm('这会切换 pinned / 钉选状态，确定继续吗？')) return;
   try {
     var res = await fetch(BASE + '/api/bucket/' + id + '/pin', { method: 'POST' });
     if (!res.ok) throw new Error(await res.text());
@@ -4062,6 +5011,7 @@ async function bucketPin(id) {
 
 // iter 2.0: anchor 切换 / anchor toggle
 async function bucketAnchor(id) {
+  if (!confirm('这会切换 anchor / 锚点状态，确定继续吗？')) return;
   var body = await toggleAnchor(id);  // toggle = no value
   if (body && body.ok) {
     await showDetail(id);
@@ -4205,9 +5155,9 @@ async function loadNetwork() {
   ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
   var W = canvas.offsetWidth, H = canvas.offsetHeight;
 
-  ctx.fillStyle = '#C7C9BC';
+  ctx.fillStyle = cssVar('--lcd', '#C7C9BC');
   ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#5B5D4F';
+  ctx.fillStyle = cssVar('--lcd-dim', '#5B5D4F');
   ctx.font = "14px 'Share Tech Mono', monospace";
   ctx.textAlign = 'center';
   ctx.fillText('LOADING MEMORY NET…', W / 2, H / 2);
@@ -4227,7 +5177,7 @@ async function loadNetwork() {
     var _n = (networkData.nodes || []).length, _e = (networkData.edges || networkData.links || []).length;
     setNetTerminal('ONLINE · ' + _n + ' nodes / ' + _e + ' links · mode=' + mode);
   } catch (e) {
-    ctx.fillStyle = '#5B5D4F';
+    ctx.fillStyle = cssVar('--lcd-dim', '#5B5D4F');
     ctx.textAlign = 'center';
     ctx.fillText('LOAD FAILED: ' + e.message, W / 2, H / 2 + 24);
     setNetTerminal('ERROR · ' + e.message);
@@ -4484,7 +5434,7 @@ function animateConceptNetwork(canvas, ctx, W, H, data) {
     var visEdges = allEdges.filter(function (e) { return visible.has(e.source) && visible.has(e.target); });
 
     // ── 静态背景：米色底 + 工程网格 ──
-    ctx.fillStyle = '#EBE6D9';
+    ctx.fillStyle = cssVar('--bg-soft', '#EBE6D9');
     ctx.fillRect(0, 0, W, H);
 
     // 细格
@@ -4686,8 +5636,8 @@ function drawConceptNetwork(ctx, W, H, data) {
 function drawBucketNetwork(ctx, W, H, data) {
   var nodes = data.nodes || [], edges = data.edges || [];
   if (!nodes.length) {
-    ctx.fillStyle = '#C7C9BC'; ctx.fillRect(0,0,W,H);
-    ctx.fillStyle = '#8A8070';
+    ctx.fillStyle = cssVar('--lcd', '#C7C9BC'); ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = cssVar('--lcd-dim', '#8A8070');
     ctx.fillText('没有记忆桶', W/2, H/2);
     return;
   }
@@ -4718,7 +5668,7 @@ function drawBucketNetwork(ctx, W, H, data) {
     });
     nodes.forEach(function(n){var p=positions[n.id]; p.x+=(cx-p.x)*0.01; p.y+=(cy-p.y)*0.01;});
   }
-  ctx.fillStyle='#C7C9BC'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=cssVar('--lcd', '#C7C9BC'); ctx.fillRect(0,0,W,H);
   edges.forEach(function(e){
     var pa=positions[e.source], pb=positions[e.target]; if(!pa||!pb) return;
     var w=e.weight||0.5;
@@ -4752,6 +5702,306 @@ function esc(s) {
   var d = document.createElement('div');
   d.textContent = s;
   return d.innerHTML;
+}
+
+var reviewCandidates = [];
+var reviewSelectedId = '';
+var reviewArea = 'pending';
+var REVIEW_HIGH_IMPACT_TYPES = ['I', 'feel', 'anchor', 'pinned', 'update', 'delete'];
+
+function reviewTags(tags) {
+  if (!Array.isArray(tags) || !tags.length) return '—';
+  return tags.map(function(t) { return '<code style="font-size:11px;">' + esc(t) + '</code>'; }).join(' ');
+}
+
+function reviewIsHighImpact(item) {
+  return REVIEW_HIGH_IMPACT_TYPES.indexOf(String(item && item.suggested_type || '')) >= 0;
+}
+
+function reviewValue(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  if (Array.isArray(v)) return v.length ? v.map(esc).join(', ') : '—';
+  if (typeof v === 'object') return esc(JSON.stringify(v, null, 2));
+  return esc(String(v));
+}
+
+function reviewField(label, valueHtml) {
+  return '<div class="review-detail-field">' +
+    '<div class="review-field-key">' + esc(label) + '</div>' +
+    '<div class="review-field-value">' + valueHtml + '</div>' +
+    '</div>';
+}
+
+function reviewFieldValue(candidate, fm, key) {
+  return Object.prototype.hasOwnProperty.call(candidate, key) ? candidate[key] : fm[key];
+}
+
+function reviewAreaLabel(area) {
+  if (area === 'approved') return '已批准候选';
+  if (area === 'rejected') return '已拒绝候选';
+  return '待审核候选';
+}
+
+function setReviewArea(area) {
+  if (['pending', 'approved', 'rejected'].indexOf(area) < 0) area = 'pending';
+  reviewArea = area;
+  clearReviewDetail();
+  loadReviewQueue();
+}
+
+function updateReviewAreaButtons() {
+  ['pending', 'approved', 'rejected'].forEach(function(area) {
+    var el = document.getElementById('review-tab-' + area);
+    if (!el) return;
+    el.style.boxShadow = area === reviewArea ? 'inset 2px 2px 5px var(--shadow-dark-subtle), inset -2px -2px 5px var(--shadow-light)' : '';
+    el.style.color = area === reviewArea ? 'var(--accent)' : '';
+  });
+}
+
+async function loadReviewQueue() {
+  var list = document.getElementById('review-list');
+  var meta = document.getElementById('review-meta');
+  if (!list || !meta) return;
+  updateReviewAreaButtons();
+  meta.textContent = '加载中…';
+  list.innerHTML = '<div class="loading">加载中…</div>';
+  try {
+    var resp = await authFetch('/api/review/' + encodeURIComponent(reviewArea) + '?limit=200');
+    if (!resp) return;
+    var data = await readJsonSafe(resp);
+    if (!data.ok) throw new Error(data.error || '读取失败');
+    reviewCandidates = data.candidates || [];
+    meta.textContent = reviewAreaLabel(reviewArea) + '：' + reviewCandidates.length + ' 条';
+    if (!reviewCandidates.length) {
+      var emptyTitle = reviewArea === 'pending' ? '暂无待审核记忆。' : (reviewArea === 'approved' ? '暂无已批准候选。' : '暂无已拒绝候选。');
+      var emptyText = reviewArea === 'pending'
+        ? '新的 hold / grow / trace 写入会先进入这里，等待主人确认。'
+        : (reviewArea === 'approved' ? '批准后的候选会保留在这里，便于回看。' : '拒绝不会删除候选；被拒绝的候选会保留在这里，也可以恢复到待审核。');
+      list.innerHTML =
+        '<div style="padding:28px 18px;text-align:center;color:var(--text-dim);font-size:13px;line-height:1.8;border:1px solid var(--border);border-radius:8px;background:var(--surface);">' +
+        '<div style="font-weight:600;color:var(--text);margin-bottom:4px;">' + esc(emptyTitle) + '</div>' +
+        '<div>' + esc(emptyText) + '</div>' +
+        '</div>';
+      clearReviewDetail();
+      return;
+    }
+    list.innerHTML = reviewCandidates.map(renderReviewCandidate).join('');
+    if (window.lucide) lucide.createIcons();
+  } catch (e) {
+    meta.textContent = '';
+    list.innerHTML = '<div style="color:var(--negative);font-size:13px;padding:16px;">审核队列加载失败：' + esc(e.message || e) + '</div>';
+  }
+}
+
+function renderReviewCandidate(item) {
+  var key = item.candidate_key || item.candidate_id || '';
+  var id = item.candidate_id || key;
+  var keyArg = JSON.stringify(key).replace(/"/g, '&quot;');
+  var high = reviewIsHighImpact(item);
+  var mismatch = item.candidate_id_mismatch
+    ? '<span style="font-size:11px;color:var(--negative);">id/file mismatch</span>'
+    : '';
+  var warn = high
+    ? '<div style="margin-top:8px;padding:8px 10px;border:1px solid rgba(184,60,60,0.45);background:rgba(184,60,60,0.08);color:var(--negative);font-size:12px;line-height:1.5;">高影响类型：请先 dry-run 核对。正式批准会二次确认，并由后端记录 explicitly_approved=true。</div>'
+    : '';
+  var lifecycleRows = '';
+  if (reviewArea === 'rejected') {
+    lifecycleRows =
+      reviewField('rejected_at', reviewValue(item.rejected_at)) +
+      reviewField('rejection_reason', reviewValue(item.rejection_reason));
+  } else if (reviewArea === 'approved') {
+    lifecycleRows =
+      reviewField('approved_at', reviewValue(item.approved_at));
+  }
+  var actions = '<button onclick="loadReviewDetail(' + keyArg + ')" title="查看详情" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="eye"></i> 查看详情</button>';
+  if (reviewArea === 'pending') {
+    actions +=
+      '<button onclick="rejectReviewCandidate(' + keyArg + ')" title="拒绝" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="x-circle"></i> 拒绝</button>' +
+      '<button class="btn-secondary" onclick="approveReviewCandidate(' + keyArg + ', true)" title="Dry-run 批准" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="scan-line"></i> Dry-run 批准</button>' +
+      '<button class="btn-danger review-danger-action" onclick="approveReviewCandidate(' + keyArg + ', false)" title="正式批准" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="check-circle"></i> 正式批准</button>';
+  } else if (reviewArea === 'rejected') {
+    actions += '<button class="btn-secondary" onclick="restoreRejectedCandidate(' + keyArg + ')" title="恢复到待审核" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="rotate-ccw"></i> 恢复到待审核</button>';
+  }
+  return (
+    '<div id="review-card-' + esc(key) + '" class="review-card">' +
+      '<div class="review-card-inner">' +
+        '<div class="review-card-main">' +
+          '<div class="review-pill-row">' +
+            '<code class="review-id">' + esc(id) + '</code>' +
+            mismatch +
+            '<span class="review-meta-pill">status: ' + reviewValue(item.status) + '</span>' +
+            '<span class="review-meta-pill">type: ' + reviewValue(item.suggested_type) + '</span>' +
+            '<span class="review-meta-pill">importance: ' + reviewValue(item.suggested_importance) + '</span>' +
+          '</div>' +
+          '<div class="review-card-title">' + reviewValue(item.title) + '</div>' +
+          '<div class="review-card-grid">' +
+            reviewField('tags', reviewTags(item.tags)) +
+            reviewField('created_by', reviewValue(item.created_by)) +
+            reviewField('source_file', reviewValue(item.source_file)) +
+            lifecycleRows +
+          '</div>' +
+          '<div class="review-card-summary">' + reviewValue(item.content_summary) + '</div>' +
+          warn +
+        '</div>' +
+        '<div class="review-card-actions">' +
+          actions +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+async function loadReviewDetail(id) {
+  var idArg = JSON.stringify(id).replace(/"/g, '&quot;');
+  reviewSelectedId = id;
+  var panel = document.getElementById('review-detail-panel');
+  var detail = document.getElementById('review-detail');
+  if (!panel || !detail) return;
+  panel.style.display = '';
+  detail.innerHTML = '<div class="loading">加载中…</div>';
+  try {
+    var resp = await authFetch('/api/review/' + encodeURIComponent(reviewArea) + '/' + encodeURIComponent(id));
+    if (!resp) return;
+    var data = await readJsonSafe(resp);
+    if (!data.ok) throw new Error(data.error || '读取失败');
+    var c = data.candidate || {};
+    var fm = c.frontmatter || {};
+    var summaryRows =
+      reviewField('title', reviewValue(c.title || fm.title)) +
+      reviewField('status', reviewValue(c.status || fm.status)) +
+      reviewField('suggested_type', reviewValue(c.suggested_type || fm.suggested_type)) +
+      reviewField('suggested_importance', reviewValue(c.suggested_importance || fm.suggested_importance)) +
+      reviewField('tags', reviewTags(c.tags || fm.tags)) +
+      reviewField('created_by', reviewValue(c.created_by || fm.created_by)) +
+      reviewField('created_at', reviewValue(c.created_at || fm.created_at));
+    if (c.approved_at || fm.approved_at) summaryRows += reviewField('approved_at', reviewValue(c.approved_at || fm.approved_at));
+    if (c.rejected_at || fm.rejected_at) summaryRows += reviewField('rejected_at', reviewValue(c.rejected_at || fm.rejected_at));
+    if (c.rejection_reason || fm.rejection_reason) summaryRows += reviewField('rejection_reason', reviewValue(c.rejection_reason || fm.rejection_reason));
+
+    var sourceRows =
+      reviewField('source_file', reviewValue(c.source_file || fm.source_file)) +
+      reviewField('original_tool', reviewValue(c.original_tool || fm.original_tool)) +
+      reviewField('perspective', reviewValue(c.perspective || fm.perspective)) +
+      reviewField('reason', reviewValue(c.reason || fm.reason)) +
+      reviewField('notes', reviewValue(c.notes || fm.notes));
+
+    var rawFields = ['candidate_key','file_name','candidate_id','candidate_id_mismatch','source_location','target_bucket_id','needs_user_confirmation','explicitly_approved','source_quote','approved_result'];
+    var rawRows = rawFields.map(function(k) {
+      return reviewField(k, reviewValue(reviewFieldValue(c, fm, k)));
+    }).join('');
+    rawRows += reviewField('raw_frontmatter', reviewValue(fm));
+
+    var highWarn = reviewIsHighImpact(c)
+      ? '<div style="margin:10px 0;padding:10px 12px;border:1px solid rgba(184,60,60,0.55);background:rgba(184,60,60,0.1);color:var(--negative);font-size:12px;font-weight:600;">高影响类型正式批准会写入或修改正式记忆库；确认后后端会记录 explicitly_approved=true。</div>'
+      : '';
+    detail.innerHTML =
+      '<div class="review-detail-shell">' +
+        '<section class="review-detail-section">' +
+          '<h4>摘要信息</h4>' +
+          '<div class="review-detail-summary-grid">' + summaryRows + '</div>' +
+          highWarn +
+        '</section>' +
+        '<section class="review-detail-section">' +
+          '<h4>完整正文</h4>' +
+          '<pre class="review-body-pre">' + reviewValue(c.body) + '</pre>' +
+        '</section>' +
+        '<section class="review-detail-section">' +
+          '<h4>来源与审核信息</h4>' +
+          '<div class="review-source-grid">' + sourceRows + '</div>' +
+        '</section>' +
+        '<details class="review-raw-details">' +
+          '<summary>显示原始字段</summary>' +
+          '<div class="review-raw-grid">' + rawRows + '</div>' +
+        '</details>' +
+        renderReviewDetailActions(idArg) +
+      '</div>';
+    if (window.lucide) lucide.createIcons();
+    panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+  } catch (e) {
+    detail.innerHTML = '<div style="color:var(--negative);">详情加载失败：' + esc(e.message || e) + '</div>';
+  }
+}
+
+function renderReviewDetailActions(idArg) {
+  if (reviewArea === 'pending') {
+    return '<div class="review-detail-actions">' +
+      '<button onclick="rejectReviewCandidate(' + idArg + ')" style="padding:6px 10px;font-size:12px;"><i data-lucide="x-circle"></i> 拒绝 / Reject</button>' +
+      '<button class="btn-secondary" onclick="approveReviewCandidate(' + idArg + ', true)" style="padding:6px 10px;font-size:12px;">Dry-run 批准</button>' +
+      '<button class="btn-danger review-danger-action" onclick="approveReviewCandidate(' + idArg + ', false)" style="padding:6px 10px;font-size:12px;">正式批准</button>' +
+      '</div>';
+  }
+  if (reviewArea === 'rejected') {
+    return '<div class="review-detail-actions">' +
+      '<button class="btn-secondary" onclick="restoreRejectedCandidate(' + idArg + ')" style="padding:6px 10px;font-size:12px;"><i data-lucide="rotate-ccw"></i> 恢复到待审核 / Restore to Pending</button>' +
+      '</div>';
+  }
+  return '';
+}
+
+function clearReviewDetail() {
+  reviewSelectedId = '';
+  var panel = document.getElementById('review-detail-panel');
+  var detail = document.getElementById('review-detail');
+  if (panel) panel.style.display = 'none';
+  if (detail) detail.innerHTML = '';
+}
+
+async function rejectReviewCandidate(id) {
+  if (!confirm('确定拒绝这条候选吗？')) return;
+  try {
+    var resp = await authFetch('/api/review/pending/' + encodeURIComponent(id) + '/reject', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({reason:'dashboard reject'})
+    });
+    if (!resp) return;
+    var data = await readJsonSafe(resp);
+    if (!data.ok) throw new Error(data.error || data.result || '拒绝失败');
+    alert(data.result || '已拒绝');
+    clearReviewDetail();
+    await loadReviewQueue();
+  } catch (e) {
+    alert('拒绝失败：' + (e.message || e));
+  }
+}
+
+async function restoreRejectedCandidate(id) {
+  if (!confirm('确定把这条已拒绝候选恢复到待审核吗？')) return;
+  try {
+    var resp = await authFetch('/api/review/rejected/' + encodeURIComponent(id) + '/restore', {
+      method: 'POST'
+    });
+    if (!resp) return;
+    var data = await readJsonSafe(resp);
+    if (!data.ok) throw new Error(data.error || data.result || '恢复失败');
+    alert(data.result || '已恢复到待审核');
+    clearReviewDetail();
+    await loadReviewQueue();
+  } catch (e) {
+    alert('恢复失败：' + (e.message || e));
+  }
+}
+
+async function approveReviewCandidate(id, dryRun) {
+  var item = reviewCandidates.find(function(c) { return (c.candidate_key || c.candidate_id) === id; }) || {};
+  if (!dryRun) {
+    if (!confirm('这会把候选写入正式记忆库，确定批准吗？')) return;
+  }
+  try {
+    var url = '/api/review/pending/' + encodeURIComponent(id) + '/approve?dry_run=' + (dryRun ? 'true' : 'false');
+    if (!dryRun) url += '&confirmed=true';
+    var resp = await authFetch(url, {
+      method: 'POST'
+    });
+    if (!resp) return;
+    var data = await readJsonSafe(resp);
+    if (!data.ok && !data.result) throw new Error(data.error || '批准失败');
+    alert(data.result || (dryRun ? 'Dry-run 完成' : '批准完成'));
+    if (!dryRun && data.ok) clearReviewDetail();
+    await loadReviewQueue();
+  } catch (e) {
+    alert((dryRun ? 'Dry-run 失败：' : '正式批准失败：') + (e.message || e));
+  }
 }
 
 // iter 1.9 A: plan weight 的中文档位锚点 / semantic anchors for plan weight
@@ -6708,6 +7958,11 @@ async function detectPatterns() {
 }
 
 async function reviewAction(bid, action) {
+  var actionLabel = action === 'pin' ? '固定为永久记忆'
+    : (action === 'important' ? '标为重要'
+    : (action === 'noise' ? '标为噪声并 resolve'
+    : (action === 'delete' ? '删除' : action)));
+  if (!confirm('这会执行导入审核操作：' + actionLabel + '。确定继续吗？')) return;
   try {
     await fetch(BASE + '/api/import/review', {
       method: 'POST', headers: {'Content-Type':'application/json'},
@@ -6772,8 +8027,7 @@ function renderV3DebugDecision(record, index) {
   const allowed = summary.policy_allowed;
   const badgeColor = ok && allowed ? 'var(--positive)' : (allowed ? 'var(--warning)' : 'var(--negative)');
   const surfaces = (summary.projection_surfaces || []).join(', ') || '-';
-  const recordId = esc(record.id || '');
-  return '<button data-decision-id="' + recordId + '" onclick="replayV3Decision(this.dataset.decisionId)" ' +
+  return '<button onclick="replayV3Decision(\'' + esc(record.id) + '\')" ' +
     'style="text-align:left;background:var(--surface-solid);border:1px solid var(--border);border-radius:4px;padding:10px 12px;cursor:pointer;color:var(--text);">' +
     '<div style="display:flex;align-items:center;gap:8px;font-size:12px;">' +
       '<span style="width:7px;height:7px;border-radius:50%;background:' + badgeColor + ';display:inline-block;flex-shrink:0;"></span>' +
@@ -6821,14 +8075,14 @@ async function pollHeartbeat() {
     const r = await fetch(BASE + '/api/heartbeat');
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
-    dot.style.background = '#3a9b5c';
+    dot.style.background = 'var(--positive)';
     const idle = Math.floor((Date.now()/1000) - (d.last_op_ts || 0));
     var decaying = d.decay_engine === 'running';
     txt.textContent = '在线 · ' + (decaying ? '衰减运行中' : '衰减停');
     txt.title = 'uptime ' + d.uptime_s + 's · 上次活跃 ' + idle + 's 前';
     dot.classList.add('breathing');   // 在线即呼吸，衰减状态只影响文字
   } catch (e) {
-    dot.style.background = '#c45a3a';
+    dot.style.background = 'var(--negative)';
     dot.classList.remove('breathing');
     txt.textContent = '离线';
     txt.title = e.message;
@@ -6960,9 +8214,9 @@ function _getMcpOrigin() {
     if (!/^https?:\/\//i.test(domain)) domain = 'https://' + domain;
     return domain.replace(/\/+$/, '');
   }
-  // 本地模式：固定用 127.0.0.1 + 当前端口，保证 Claude Desktop 连本机 Docker
+  // 本地模式：使用当前访问主机，支持本机和 Tailscale 私有网络访问。
   const port = location.port || (location.protocol === 'https:' ? '443' : '80');
-  return 'http://127.0.0.1:' + port;
+  return location.protocol + '//' + location.hostname + ':' + port;
 }
 
 async function saveMcpAuth() {
@@ -7337,6 +8591,7 @@ async function bucketSaveEdit(bid) {
   if (weightEl) body.weight = parseFloat(weightEl.value) / 100;
   // 内容只在非空时带上，避免误清空
   if (newContent && newContent.trim()) body.content = newContent;
+  if (!confirm('这会修改正式记忆桶字段，确定保存吗？')) return;
   const msg = document.getElementById('edit-msg');
   msg.textContent = '保存中…';
   msg.style.color = 'var(--text-dim)';
@@ -8206,3 +9461,4 @@ function renderSelfEntries() {
 
 </body>
 </html>
+
