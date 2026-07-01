@@ -15,8 +15,12 @@ venv/
 .vscode/
 config.yaml
 buckets/
+buckets/user_assets/
+buckets/user_settings/
 buckets_backup*/
 backups/
+*_backup_*
+_runtime_memory_review_export_recover_*/
 test_buckets/
 *.log
 server.log

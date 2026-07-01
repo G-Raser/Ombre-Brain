@@ -14,34 +14,123 @@
   (function() {
     var KEY = 'ombre_dashboard_theme';
     var DEFAULT_THEME = 'umi-purple';
+    var UI_CACHE_KEY = 'ombre_dashboard_ui_settings_cache';
     var THEMES = {
       'ombre-original': '#E7E2D8',
-      'umi-purple': '#0C0712',
+      'umi-purple': '#080710',
       'cattea-gold-black': '#080808',
       'cc-gold-brown': '#17100C'
+    };
+    var DEFAULT_UI_SETTINGS = {
+      theme: DEFAULT_THEME,
+      background_enabled: false,
+      background_url: null,
+      background_dim: 0.72,
+      background_blur: 0,
+      background_position: 'center center',
+      show_mascot: false
     };
     function normalizeTheme(value) {
       return Object.prototype.hasOwnProperty.call(THEMES, value) ? value : DEFAULT_THEME;
     }
-    window.setDashboardTheme = function(value, persist) {
-      var theme = normalizeTheme(value);
-      document.documentElement.setAttribute('data-theme', theme);
-      var meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute('content', THEMES[theme]);
-      if (persist !== false) {
-        try { localStorage.setItem(KEY, theme); } catch (_) {}
-      }
+    function normalizeUiSettings(raw) {
+      var s = Object.assign({}, DEFAULT_UI_SETTINGS, raw || {});
+      s.theme = normalizeTheme(s.theme);
+      s.background_enabled = !!s.background_enabled && !!s.background_url;
+      s.background_dim = Math.max(0.45, Math.min(0.90, parseFloat(s.background_dim || 0.72)));
+      s.background_blur = Math.max(0, Math.min(8, parseFloat(s.background_blur || 0)));
+      if (['center center', 'top center', 'bottom center'].indexOf(s.background_position) < 0) s.background_position = 'center center';
+      s.show_mascot = !!s.show_mascot;
+      return s;
+    }
+    function updateThemePickerLabel(theme) {
+      var label = {
+        'ombre-original': 'Ombre Original',
+        'umi-purple': 'Umi Purple',
+        'cattea-gold-black': 'Cattea Gold Black',
+        'cc-gold-brown': 'CC Gold Brown'
+      }[theme] || 'Umi Purple';
+      var btn = document.getElementById('theme-dropdown-current');
+      if (btn) btn.textContent = label;
       var select = document.getElementById('theme-select');
       if (select && select.value !== theme) select.value = theme;
+      document.querySelectorAll('.theme-option').forEach(function(opt) {
+        opt.classList.toggle('selected', opt.getAttribute('data-theme-value') === theme);
+      });
+    }
+    window.applyDashboardUiSettings = function(raw) {
+      var settings = normalizeUiSettings(raw);
+      window.OMBRE_UI_SETTINGS = settings;
+      document.documentElement.setAttribute('data-theme', settings.theme);
+      document.documentElement.setAttribute('data-bg-enabled', settings.background_enabled ? 'true' : 'false');
+      document.documentElement.setAttribute('data-show-mascot', settings.show_mascot ? 'true' : 'false');
+      document.documentElement.style.setProperty('--custom-bg-image', settings.background_url ? 'url("' + settings.background_url.replace(/"/g, '%22') + '")' : 'none');
+      document.documentElement.style.setProperty('--custom-bg-dim', String(settings.background_dim));
+      document.documentElement.style.setProperty('--custom-bg-blur', String(settings.background_blur) + 'px');
+      document.documentElement.style.setProperty('--custom-bg-mobile-blur', String(Math.min(Number(settings.background_blur) || 0, 2)) + 'px');
+      document.documentElement.style.setProperty('--custom-bg-position', settings.background_position);
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', THEMES[settings.theme]);
+      updateThemePickerLabel(settings.theme);
+      if (window.syncUiSettingsControls) window.syncUiSettingsControls(settings);
+      try {
+        localStorage.setItem(KEY, settings.theme);
+        localStorage.setItem(UI_CACHE_KEY, JSON.stringify(settings));
+      } catch (_) {}
+      return settings;
+    };
+    window.saveDashboardUiSettings = async function(patch) {
+      var next = normalizeUiSettings(Object.assign({}, window.OMBRE_UI_SETTINGS || DEFAULT_UI_SETTINGS, patch || {}));
+      window.applyDashboardUiSettings(next);
+      try {
+        var resp = await fetch('/api/ui-settings', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(patch || {})
+        });
+        var data = await resp.json().catch(function() { return {}; });
+        if (!resp.ok || data.ok === false) throw new Error(data.error || resp.statusText || 'save failed');
+        if (data.settings) window.applyDashboardUiSettings(data.settings);
+        return data.settings || next;
+      } catch (e) {
+        console.warn('[ui-settings] server save failed; using local fallback only', e);
+        throw e;
+      }
+    };
+    window.setDashboardTheme = function(value, persist) {
+      var theme = normalizeTheme(value);
+      var next = Object.assign({}, window.OMBRE_UI_SETTINGS || DEFAULT_UI_SETTINGS, {theme: theme});
+      window.applyDashboardUiSettings(next);
+      if (persist !== false) window.saveDashboardUiSettings({theme: theme}).catch(function(e) {
+        var status = document.getElementById('ui-settings-status');
+        if (status) { status.textContent = '主题保存失败：' + (e.message || e); status.style.color = 'var(--negative)'; }
+      });
       return theme;
     };
     window.getDashboardTheme = function() {
-      try { return normalizeTheme(localStorage.getItem(KEY)); } catch (_) { return DEFAULT_THEME; }
+      return (window.OMBRE_UI_SETTINGS && window.OMBRE_UI_SETTINGS.theme) || DEFAULT_THEME;
+    };
+    window.loadDashboardUiSettings = async function() {
+      try {
+        var resp = await fetch('/api/ui-settings', {cache: 'no-store'});
+        var data = await resp.json();
+        if (!resp.ok || data.ok === false) throw new Error(data.error || resp.statusText);
+        return window.applyDashboardUiSettings(data.settings || {});
+      } catch (e) {
+        console.warn('[ui-settings] server load failed; using cache/default', e);
+        var cached = null;
+        try { cached = JSON.parse(localStorage.getItem(UI_CACHE_KEY) || 'null'); } catch (_) {}
+        return window.applyDashboardUiSettings(cached || {theme: localStorage.getItem(KEY) || DEFAULT_THEME});
+      }
     };
     window.OMBRE_THEME_STORAGE_KEY = KEY;
-    window.setDashboardTheme(window.getDashboardTheme(), false);
+    window.OMBRE_UI_SETTINGS = normalizeUiSettings((function() {
+      try { return JSON.parse(localStorage.getItem(UI_CACHE_KEY) || 'null'); } catch (_) { return null; }
+    })() || {theme: (function() { try { return localStorage.getItem(KEY); } catch (_) { return DEFAULT_THEME; } })()});
+    window.applyDashboardUiSettings(window.OMBRE_UI_SETTINGS);
+    window.loadDashboardUiSettings();
     document.addEventListener('DOMContentLoaded', function() {
-      window.setDashboardTheme(window.getDashboardTheme(), false);
+      window.applyDashboardUiSettings(window.OMBRE_UI_SETTINGS);
     });
   })();
 </script>
@@ -59,49 +148,49 @@
     --font-display: "Cormorant Garamond", "Noto Serif SC", Georgia, serif;
     --font-mono: "SF Mono", "Fira Code", Consolas, "Liberation Mono", Menlo, monospace;
 
-    --bg: #0C0712;
-    --bg-soft: #15101C;
-    --bg-gradient: #0C0712;
-    --panel: #17101F;
-    --panel-strong: #21172C;
-    --card: #221A2B;
-    --card-hover: #2A2135;
-    --border: #3A3047;
-    --border-soft: #2A2334;
-    --text: #F1ECF7;
-    --text-muted: #B7A9C7;
-    --text-faint: #7F728E;
-    --accent: #BFA5FF;
-    --accent-soft: rgba(191, 165, 255, 0.18);
-    --accent-strong: #D7C8FF;
-    --danger: #D98A9B;
-    --danger-soft: rgba(217, 138, 155, 0.15);
-    --success: #A9C7A1;
-    --warning: #C9A874;
-    --shadow: 0 18px 44px rgba(2, 1, 4, 0.45);
-    --chip-bg: rgba(191, 165, 255, 0.10);
-    --button-bg: #241B2E;
-    --button-border: #42364F;
+    --bg: #07060D;
+    --bg-soft: #0A0812;
+    --bg-gradient: #07060D;
+    --panel: rgba(15, 13, 24, 0.82);
+    --panel-strong: rgba(18, 15, 27, 0.86);
+    --card: rgba(28, 24, 42, 0.72);
+    --card-hover: rgba(34, 29, 50, 0.76);
+    --border: rgba(210, 195, 255, 0.13);
+    --border-soft: rgba(210, 195, 255, 0.08);
+    --text: #F1ECFA;
+    --text-muted: #D8D1E8;
+    --text-faint: #B8AFCB;
+    --accent: #9B86D8;
+    --accent-soft: rgba(155, 134, 216, 0.11);
+    --accent-strong: #C5B7EE;
+    --danger: #B8788C;
+    --danger-soft: rgba(184, 120, 140, 0.11);
+    --success: #95A887;
+    --warning: #B49A67;
+    --shadow: 0 18px 46px rgba(0, 0, 0, 0.58);
+    --chip-bg: rgba(155, 134, 216, 0.075);
+    --button-bg: rgba(17, 15, 26, 0.78);
+    --button-border: rgba(210, 195, 255, 0.12);
 
     --surface: var(--panel);
     --surface-solid: var(--card);
-    --border-strong: #51445F;
+    --border-strong: rgba(210, 195, 255, 0.22);
     --text-dim: var(--text-muted);
     --text-light: var(--text-faint);
     --accent-light: var(--accent-strong);
-    --accent-glow: rgba(191, 165, 255, 0.24);
+    --accent-glow: rgba(155, 134, 216, 0.12);
     --positive: var(--success);
     --negative: var(--danger);
-    --shadow-light: rgba(255, 255, 255, 0.045);
-    --shadow-dark: rgba(0, 0, 0, 0.50);
-    --shadow-dark-subtle: rgba(0, 0, 0, 0.28);
-    --lcd: #1F2630;
-    --lcd-text: #D8E2D1;
-    --lcd-dim: #8D9A8A;
-    --lcd-glow: rgba(191, 165, 255, 0.16);
-    --shell-radius: 24px;
-    --radius-inner: 16px;
-    --radius-control: 12px;
+    --shadow-light: rgba(235, 225, 255, 0.018);
+    --shadow-dark: rgba(0, 0, 0, 0.62);
+    --shadow-dark-subtle: rgba(0, 0, 0, 0.40);
+    --lcd: #171A23;
+    --lcd-text: #D7D2E4;
+    --lcd-dim: #8B8498;
+    --lcd-glow: rgba(155, 134, 216, 0.08);
+    --shell-radius: 8px;
+    --radius-inner: 6px;
+    --radius-control: 6px;
   }
 
   html[data-theme="ombre-original"] {
@@ -144,6 +233,9 @@
     --lcd-text: #25271E;
     --lcd-dim: #5B5D4F;
     --lcd-glow: rgba(37, 39, 30, 0.18);
+    --shell-radius: 24px;
+    --radius-inner: 16px;
+    --radius-control: 12px;
   }
 
   html[data-theme="cattea-gold-black"] {
@@ -232,15 +324,80 @@
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
+  html {
+    min-height: 100%;
+    background: var(--bg);
+  }
+
   body {
     font-family: var(--font-ui);
     font-weight: 400;
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
+    min-height: 100svh;
     line-height: 1.75;
     letter-spacing: 0;
     -webkit-font-smoothing: antialiased;
+    position: relative;
+    isolation: isolate;
+  }
+
+  body::before,
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    pointer-events: none;
+    opacity: 0;
+  }
+  body::before {
+    z-index: -2;
+    background-image: var(--custom-bg-image);
+    background-size: cover;
+    background-position: var(--custom-bg-position, center center);
+    background-repeat: no-repeat;
+    background-attachment: scroll;
+    filter: blur(var(--custom-bg-blur, 0px));
+    transform: scale(1.02);
+    will-change: opacity;
+  }
+  body::after {
+    z-index: -1;
+    background:
+      linear-gradient(180deg, rgba(7, 6, 13, var(--custom-bg-dim, 0.72)), rgba(5, 5, 10, calc(var(--custom-bg-dim, 0.72) + 0.05))),
+      radial-gradient(circle at 70% 10%, rgba(82, 58, 148, 0.18), transparent 44%);
+  }
+  html[data-theme="umi-purple"][data-bg-enabled="true"] body::before,
+  html[data-theme="umi-purple"][data-bg-enabled="true"] body::after {
+    opacity: 1;
+  }
+  @media (max-width: 768px), (hover: none), (pointer: coarse) {
+    body {
+      min-height: 100svh;
+    }
+    body::before,
+    body::after {
+      top: 0;
+      right: 0;
+      bottom: auto;
+      left: 0;
+      width: 100%;
+      height: 100svh;
+      min-height: 100svh;
+    }
+    body::before {
+      background-attachment: scroll !important;
+      filter: blur(var(--custom-bg-mobile-blur, 0px));
+      transform: scale(1.01);
+    }
+    #auth-overlay {
+      min-height: 100svh;
+      background-attachment: scroll !important;
+    }
   }
 
   .header {
@@ -313,6 +470,111 @@
   .theme-picker select:focus {
     outline: none;
     box-shadow: none !important;
+  }
+  .theme-dropdown {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    min-width: 210px;
+  }
+  .theme-dropdown-button {
+    width: 100%;
+    height: 32px;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border: 1px solid var(--button-border);
+    border-radius: var(--radius-control);
+    background: var(--button-bg);
+    color: var(--text);
+    cursor: pointer;
+    font: 600 12px/1 var(--font-ui);
+  }
+  .theme-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 100%;
+    padding: 6px;
+    display: none;
+    z-index: 1000;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: color-mix(in srgb, var(--panel-strong) 94%, #000);
+    box-shadow: 0 18px 44px rgba(0,0,0,0.38);
+  }
+  .theme-dropdown.open .theme-dropdown-menu {
+    display: grid;
+    gap: 4px;
+  }
+  .theme-option {
+    min-height: 34px;
+    padding: 7px 10px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--text-muted);
+    text-align: left;
+    cursor: pointer;
+    font: 600 12px/1.25 var(--font-ui);
+  }
+  .theme-option:hover,
+  .theme-option.selected {
+    background: var(--accent-soft);
+    border-color: var(--border-strong);
+    color: var(--text);
+  }
+  .theme-picker select.theme-native-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .ui-settings-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .ui-settings-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-inner);
+    background: var(--surface-solid);
+    padding: 14px;
+  }
+  .ui-bg-preview {
+    min-height: 88px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background:
+      linear-gradient(180deg, rgba(7,6,13,0.58), rgba(7,6,13,0.78)),
+      var(--custom-bg-image),
+      var(--bg);
+    background-size: cover;
+    background-position: var(--custom-bg-position, center center);
+  }
+  .ui-settings-card input[type=file] {
+    width: 100%;
+    color: var(--text-muted);
+    background: var(--button-bg);
+    border: 1px solid var(--button-border);
+    border-radius: var(--radius-control);
+    padding: 8px;
+  }
+  .ui-range-row {
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr) 46px;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 10px 0;
+  }
+  @media (max-width: 768px) {
+    .ui-settings-grid { grid-template-columns: 1fr; }
+    .ui-range-row { grid-template-columns: 1fr; gap: 4px; }
   }
   .search-bar {
     margin-left: auto;
@@ -1498,7 +1760,9 @@
     filter: drop-shadow(2px 3px 4px var(--shadow-dark));
     transition: transform .25s cubic-bezier(.3,1.4,.5,1);
     image-rendering: pixelated;
+    display: none !important;
   }
+  html[data-show-mascot="true"] #ob-chick { display: block !important; }
   #ob-chick:hover { transform: translateY(-3px) scale(1.08); }
   #ob-chick svg { display:block; width:100%; height:100%; shape-rendering: crispEdges; }
   @keyframes ob-chick-wiggle { 0%,100%{transform:rotate(0)} 25%{transform:rotate(-9deg)} 75%{transform:rotate(9deg)} }
@@ -2605,6 +2869,231 @@
     border: 1px solid var(--border-soft);
   }
 
+  html[data-theme="umi-purple"] body {
+    background:
+      radial-gradient(circle at 1px 1px, rgba(210, 195, 255, 0.012) 1px, transparent 1.5px) 0 0 / 7px 7px,
+      radial-gradient(circle at 50% 10%, rgba(155, 134, 216, 0.045), transparent 42%),
+      linear-gradient(180deg, rgba(7, 6, 13, 0.84), rgba(5, 5, 10, 0.96)),
+      var(--bg) !important;
+    color: var(--text);
+  }
+  html[data-theme="umi-purple"] .header,
+  html[data-theme="umi-purple"] .tabs {
+    background: rgba(10, 8, 17, 0.88) !important;
+    border-color: var(--border) !important;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(235, 225, 255, 0.024) !important;
+    backdrop-filter: blur(10px);
+  }
+  html[data-theme="umi-purple"] .tabs {
+    border-radius: 6px !important;
+    gap: 6px !important;
+  }
+  html[data-theme="umi-purple"] .tab {
+    background: rgba(18, 15, 27, 0.72) !important;
+    border-color: rgba(210, 195, 255, 0.105) !important;
+    border-radius: 6px !important;
+    color: var(--text-muted) !important;
+    box-shadow: none !important;
+    font-family: var(--font-ui) !important;
+    text-transform: none !important;
+  }
+  html[data-theme="umi-purple"] .tab:hover {
+    background: rgba(24, 20, 34, 0.82) !important;
+    border-color: rgba(210, 195, 255, 0.17) !important;
+    transform: translateY(-1px);
+  }
+  html[data-theme="umi-purple"] .tab.active {
+    background: rgba(30, 25, 43, 0.82) !important;
+    border-color: rgba(197, 183, 238, 0.30) !important;
+    box-shadow: inset 0 0 0 1px rgba(210, 195, 255, 0.055), 0 7px 16px rgba(0, 0, 0, 0.18) !important;
+    color: var(--accent-strong) !important;
+  }
+  html[data-theme="umi-purple"] .tab > span:first-child,
+  html[data-theme="umi-purple"] .tab .tab-en,
+  html[data-theme="umi-purple"] .header .stats,
+  html[data-theme="umi-purple"] .header .version-badge,
+  html[data-theme="umi-purple"] button,
+  html[data-theme="umi-purple"] .btn-primary,
+  html[data-theme="umi-purple"] .btn-secondary,
+  html[data-theme="umi-purple"] .btn-danger,
+  html[data-theme="umi-purple"] .filter-btn {
+    font-family: var(--font-ui) !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+  }
+  html[data-theme="umi-purple"] .header h1 {
+    font-family: var(--font-display) !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+  }
+  html[data-theme="umi-purple"] .tab > span:first-child {
+    font-size: 13px;
+    font-weight: 650;
+  }
+  html[data-theme="umi-purple"] .tab .tab-en {
+    font-size: 10px;
+    color: var(--text-faint) !important;
+  }
+  html[data-theme="umi-purple"] .theme-picker,
+  html[data-theme="umi-purple"] .theme-dropdown-button,
+  html[data-theme="umi-purple"] .theme-dropdown-menu,
+  html[data-theme="umi-purple"] .search-bar input,
+  html[data-theme="umi-purple"] input,
+  html[data-theme="umi-purple"] select,
+  html[data-theme="umi-purple"] textarea {
+    background: rgba(12, 10, 19, 0.88) !important;
+    border: 1px solid rgba(210, 195, 255, 0.11) !important;
+    border-radius: 6px !important;
+    box-shadow: inset 0 1px 0 rgba(235, 225, 255, 0.018), 0 8px 20px rgba(0, 0, 0, 0.16) !important;
+  }
+  html[data-theme="umi-purple"] .theme-option {
+    border-radius: 5px !important;
+    color: var(--text-muted) !important;
+  }
+  html[data-theme="umi-purple"] .theme-option:hover,
+  html[data-theme="umi-purple"] .theme-option.selected {
+    background: rgba(35, 29, 49, 0.84) !important;
+    border-color: rgba(197, 183, 238, 0.24) !important;
+    color: var(--text) !important;
+  }
+  html[data-theme="umi-purple"] .bucket-row,
+  html[data-theme="umi-purple"] .config-section,
+  html[data-theme="umi-purple"] .breath-info,
+  html[data-theme="umi-purple"] .breath-flow,
+  html[data-theme="umi-purple"] .tool-card,
+  html[data-theme="umi-purple"] .self-panel,
+  html[data-theme="umi-purple"] .self-entry,
+  html[data-theme="umi-purple"] .review-card,
+  html[data-theme="umi-purple"] .review-detail-shell,
+  html[data-theme="umi-purple"] .review-raw-details,
+  html[data-theme="umi-purple"] .detail-panel {
+    background: linear-gradient(180deg, rgba(24, 20, 34, 0.76), rgba(18, 15, 27, 0.84)) !important;
+    border-color: var(--border) !important;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.30), inset 0 1px 0 rgba(235, 225, 255, 0.024) !important;
+    backdrop-filter: blur(8px);
+  }
+  html[data-theme="umi-purple"] .config-section,
+  html[data-theme="umi-purple"] .detail-panel,
+  html[data-theme="umi-purple"] .review-detail-shell,
+  html[data-theme="umi-purple"] .self-panel {
+    border-radius: 8px !important;
+  }
+  html[data-theme="umi-purple"] .bucket-row,
+  html[data-theme="umi-purple"] .breath-info,
+  html[data-theme="umi-purple"] .breath-flow,
+  html[data-theme="umi-purple"] .tool-card,
+  html[data-theme="umi-purple"] .self-entry,
+  html[data-theme="umi-purple"] .review-card,
+  html[data-theme="umi-purple"] .review-raw-details,
+  html[data-theme="umi-purple"] .detail-content,
+  html[data-theme="umi-purple"] .review-body-pre {
+    border-radius: 6px !important;
+  }
+  html[data-theme="umi-purple"] .bucket-row:hover,
+  html[data-theme="umi-purple"] .review-card:hover {
+    background: linear-gradient(180deg, rgba(29, 24, 40, 0.82), rgba(22, 18, 32, 0.90)) !important;
+    box-shadow: 0 13px 30px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(235, 225, 255, 0.028) !important;
+  }
+  html[data-theme="umi-purple"] .btn-primary,
+  html[data-theme="umi-purple"] .btn-secondary,
+  html[data-theme="umi-purple"] .btn-danger,
+  html[data-theme="umi-purple"] .filter-btn,
+  html[data-theme="umi-purple"] .icon-btn,
+  html[data-theme="umi-purple"] button:not(.tab):not(.close-btn) {
+    border-radius: 6px !important;
+  }
+  html[data-theme="umi-purple"] .btn-secondary,
+  html[data-theme="umi-purple"] .filter-btn,
+  html[data-theme="umi-purple"] button:not(.btn-primary):not(.btn-danger):not(.tab):not(.close-btn) {
+    background: rgba(16, 13, 24, 0.82) !important;
+    border: 1px solid rgba(210, 195, 255, 0.105) !important;
+    box-shadow: 0 7px 16px rgba(0, 0, 0, 0.20), inset 0 1px 0 rgba(235, 225, 255, 0.018) !important;
+    color: var(--text-muted) !important;
+  }
+  html[data-theme="umi-purple"] .btn-primary,
+  html[data-theme="umi-purple"] .breath-controls button {
+    background: linear-gradient(180deg, rgba(58, 49, 82, 0.88), rgba(38, 32, 55, 0.92)) !important;
+    border: 1px solid rgba(197, 183, 238, 0.24) !important;
+    box-shadow: 0 9px 20px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(235, 225, 255, 0.045) !important;
+    color: #F2ECFF !important;
+    text-shadow: none !important;
+  }
+  html[data-theme="umi-purple"] .btn-danger,
+  html[data-theme="umi-purple"] .review-danger-action {
+    background: rgba(65, 34, 47, 0.56) !important;
+    border-color: rgba(184, 120, 140, 0.24) !important;
+    color: #D9A1AE !important;
+  }
+  html[data-theme="umi-purple"] .domain-pill,
+  html[data-theme="umi-purple"] .review-meta-pill,
+  html[data-theme="umi-purple"] .review-id,
+  html[data-theme="umi-purple"] .self-entry-aspect,
+  html[data-theme="umi-purple"] .filter-btn.active {
+    background: rgba(155, 134, 216, 0.07) !important;
+    border-color: rgba(210, 195, 255, 0.12) !important;
+    border-radius: 5px !important;
+    color: var(--text-muted) !important;
+  }
+  html[data-theme="umi-purple"] .filter-btn.active {
+    color: var(--accent-strong) !important;
+    background: rgba(35, 29, 49, 0.84) !important;
+    border-color: rgba(197, 183, 238, 0.24) !important;
+    box-shadow: inset 0 0 0 1px rgba(210, 195, 255, 0.045), 0 7px 16px rgba(0, 0, 0, 0.18) !important;
+  }
+  html[data-theme="umi-purple"] .bucket-row .score,
+  html[data-theme="umi-purple"] .bucket-row .time,
+  html[data-theme="umi-purple"] .bucket-row-tags,
+  html[data-theme="umi-purple"] .review-card-grid,
+  html[data-theme="umi-purple"] .review-field-key,
+  html[data-theme="umi-purple"] .self-entry-time {
+    color: var(--text-faint) !important;
+  }
+  html[data-theme="umi-purple"] input[type=range]::-webkit-slider-runnable-track {
+    height: 5px;
+    background: rgba(11, 9, 17, 0.88) !important;
+    border: 1px solid rgba(210, 195, 255, 0.08);
+    border-radius: 5px !important;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.44) !important;
+  }
+  html[data-theme="umi-purple"] input[type=range]::-webkit-slider-thumb {
+    width: 15px;
+    height: 15px;
+    background: #9A8BC3 !important;
+    border: 1px solid rgba(235, 225, 255, 0.26);
+    box-shadow: 0 2px 7px rgba(0, 0, 0, 0.34) !important;
+  }
+  html[data-theme="umi-purple"] input[type=range]::-moz-range-track {
+    height: 5px;
+    background: rgba(11, 9, 17, 0.88) !important;
+    border: 1px solid rgba(210, 195, 255, 0.08);
+    border-radius: 5px !important;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.44) !important;
+  }
+  html[data-theme="umi-purple"] input[type=range]::-moz-range-thumb {
+    width: 15px;
+    height: 15px;
+    background: #9A8BC3 !important;
+    border: 1px solid rgba(235, 225, 255, 0.26);
+    box-shadow: 0 2px 7px rgba(0, 0, 0, 0.34) !important;
+  }
+  html[data-theme="umi-purple"] .hw-switch {
+    border-radius: 8px !important;
+  }
+  html[data-theme="umi-purple"] .hw-switch::after {
+    border-radius: 5px !important;
+  }
+  html[data-theme="umi-purple"] .detail-panel .close-btn,
+  html[data-theme="umi-purple"] .self-fab {
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.26) !important;
+  }
+  html[data-theme="umi-purple"] .review-body-pre,
+  html[data-theme="umi-purple"] .review-raw-details,
+  html[data-theme="umi-purple"] pre,
+  html[data-theme="umi-purple"] code {
+    background: rgba(12, 10, 19, 0.86) !important;
+    border-color: rgba(210, 195, 255, 0.085) !important;
+  }
+
   @media (max-width: 768px) {
     .header {
       align-items: stretch;
@@ -2625,6 +3114,108 @@
     }
     .tab .tab-en {
       font-size: 10px;
+    }
+  }
+
+  .filter-toggle,
+  .bucket-tag-more {
+    display: none;
+  }
+
+  .bucket-tag-more {
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    padding: 2px 7px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-solid);
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 10px;
+    line-height: 1.2;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .bucket-tag-more .less-label {
+    display: none;
+  }
+
+  @media (max-width: 768px) {
+    .filters {
+      gap: 6px;
+      margin-bottom: 12px;
+      align-items: flex-start;
+    }
+    .filters:not(.filters-expanded) .filter-extra:not(.active):not(.filter-selected-hidden) {
+      display: none;
+    }
+    .filter-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 34px;
+    }
+    .filter-btn {
+      min-height: 34px;
+      border-radius: 7px;
+      white-space: nowrap;
+    }
+    .bucket-row-top {
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+    .bucket-row-top .name {
+      flex: 1 1 calc(100% - 44px);
+      white-space: normal;
+      overflow-wrap: anywhere;
+      line-height: 1.45;
+    }
+    .bucket-row-tags {
+      display: flex !important;
+      flex: 1 0 100%;
+      justify-content: flex-start;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 5px;
+      max-width: 100%;
+      padding-left: 34px;
+      margin-top: 2px;
+      min-width: 0;
+    }
+    .bucket-row-tags .domain-pill,
+    .bucket-row-tags .score,
+    .bucket-row-tags .emotion {
+      max-width: 100%;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .bucket-row:not(.tags-expanded) .bucket-row-tags .mobile-extra-tag {
+      display: none;
+    }
+    .bucket-row-tags .bucket-tag-more {
+      display: inline-flex;
+    }
+    .bucket-row.tags-expanded .bucket-tag-more .more-label {
+      display: none;
+    }
+    .bucket-row.tags-expanded .bucket-tag-more .less-label {
+      display: inline;
+    }
+    html[data-theme="umi-purple"] .filter-toggle,
+    html[data-theme="umi-purple"] .bucket-tag-more {
+      background: rgba(16, 13, 24, 0.82) !important;
+      border-color: rgba(210, 195, 255, 0.14) !important;
+      color: var(--text-muted) !important;
+      border-radius: 6px !important;
+      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.20), inset 0 1px 0 rgba(235, 225, 255, 0.018) !important;
+    }
+    html[data-theme="umi-purple"] .filter-toggle:hover,
+    html[data-theme="umi-purple"] .bucket-tag-more:hover {
+      color: var(--accent-strong) !important;
+      border-color: rgba(197, 183, 238, 0.24) !important;
+      background: rgba(24, 20, 34, 0.86) !important;
     }
   }
 </style>
@@ -2674,15 +3265,27 @@
     <button onclick="doSearch()" title="搜索"><i data-lucide="search"></i></button>
   </div>
   <div class="header-actions">
-    <label class="theme-picker" title="Dashboard theme">
+    <div class="theme-picker" title="Dashboard theme">
       <i data-lucide="palette" style="width:14px;height:14px;"></i>
-      <select id="theme-select" aria-label="Dashboard theme" onchange="setDashboardTheme(this.value)">
+      <select id="theme-select" class="theme-native-hidden" aria-label="Dashboard theme" tabindex="-1" onchange="setDashboardTheme(this.value)">
         <option value="ombre-original">Ombre Original</option>
         <option value="umi-purple">Umi Purple</option>
         <option value="cattea-gold-black">Cattea Gold Black</option>
         <option value="cc-gold-brown">CC Gold Brown</option>
       </select>
-    </label>
+      <div class="theme-dropdown" id="theme-dropdown">
+        <button type="button" class="theme-dropdown-button" onclick="toggleThemeDropdown(event)" aria-haspopup="listbox" aria-expanded="false">
+          <span id="theme-dropdown-current">Umi Purple</span>
+          <i data-lucide="chevron-down" style="width:14px;height:14px;"></i>
+        </button>
+        <div class="theme-dropdown-menu" role="listbox">
+          <button type="button" class="theme-option" data-theme-value="ombre-original" onclick="chooseDashboardTheme('ombre-original')">Ombre Original</button>
+          <button type="button" class="theme-option" data-theme-value="umi-purple" onclick="chooseDashboardTheme('umi-purple')">Umi Purple</button>
+          <button type="button" class="theme-option" data-theme-value="cattea-gold-black" onclick="chooseDashboardTheme('cattea-gold-black')">Cattea Gold Black</button>
+          <button type="button" class="theme-option" data-theme-value="cc-gold-brown" onclick="chooseDashboardTheme('cc-gold-brown')">CC Gold Brown</button>
+        </div>
+      </div>
+    </div>
     <button onclick="openFeedback()" title="给作者反馈" style="height:32px;padding:0 12px;gap:5px;display:inline-flex;align-items:center;white-space:nowrap;font-size:12px;"><i data-lucide="message-circle"></i> 反馈</button>
     <button onclick="doLogout()" title="退出登录" style="height:32px;padding:0 12px;gap:5px;display:inline-flex;align-items:center;white-space:nowrap;font-size:12px;"><i data-lucide="log-out"></i> 退出</button>
   </div>
@@ -3201,6 +3804,55 @@
           <input type="text" id="settings-human-from" placeholder="用户" maxlength="20" style="width:120px;" />
           <button onclick="syncExistingHuman()" title="替换旧记忆" style="font-size:12px;padding:0 12px;height:32px;display:inline-flex;align-items:center;gap:5px;"><i data-lucide="replace"></i> 替换旧记忆</button>
           <span id="settings-human-sync-msg" style="font-size:12px;color:var(--text-dim);"></span>
+        </div>
+      </div>
+
+      <div style="margin-bottom:18px;">
+        <div style="font-weight:600;font-size:13px;margin-bottom:6px;">背景图 / Background</div>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;line-height:1.6;">
+          背景图、主题和小鸡开关会保存到服务器端 <code>buckets/user_settings/ui.json</code>，手机和电脑访问同一个服务时会保持一致。
+        </div>
+        <div class="ui-settings-grid">
+          <div class="ui-settings-card">
+            <div class="ui-bg-preview" id="ui-bg-preview"></div>
+            <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+              <input type="file" id="ui-bg-file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" />
+              <button class="btn-primary" onclick="uploadUiBackground()" style="height:34px;padding:0 12px;">上传背景图</button>
+              <button onclick="clearUiBackground()" style="height:34px;padding:0 12px;">关闭背景图</button>
+            </div>
+            <div id="ui-settings-status" style="font-size:12px;color:var(--text-dim);margin-top:8px;min-height:18px;"></div>
+          </div>
+          <div class="ui-settings-card">
+            <label class="hw-toggle-row" style="justify-content:space-between;margin-bottom:10px;">
+              <span>启用背景图</span>
+              <input type="checkbox" id="ui-bg-enabled" onchange="saveUiSettingsFromControls()" />
+            </label>
+            <label class="hw-toggle-row" style="justify-content:space-between;margin-bottom:10px;">
+              <span>显示小鸡 / Show mascot</span>
+              <input type="checkbox" id="ui-show-mascot" onchange="saveUiSettingsFromControls()" />
+            </label>
+            <div class="ui-range-row">
+              <label for="ui-bg-dim">背景暗度</label>
+              <input type="range" id="ui-bg-dim" min="0.45" max="0.90" step="0.01" value="0.72" oninput="updateUiRangeLabels(); applyUiSettingsFromControls(false)" onchange="saveUiSettingsFromControls()" />
+              <span id="ui-bg-dim-label">0.72</span>
+            </div>
+            <div class="ui-range-row">
+              <label for="ui-bg-blur">背景模糊</label>
+              <input type="range" id="ui-bg-blur" min="0" max="8" step="1" value="0" oninput="updateUiRangeLabels(); applyUiSettingsFromControls(false)" onchange="saveUiSettingsFromControls()" />
+              <span id="ui-bg-blur-label">0px</span>
+            </div>
+            <div class="config-row" style="margin:10px 0 0;">
+              <label>背景位置</label>
+              <select id="ui-bg-position" onchange="saveUiSettingsFromControls()">
+                <option value="center center">center center</option>
+                <option value="top center">top center</option>
+                <option value="bottom center">bottom center</option>
+              </select>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+              <button onclick="resetUiSettings()" class="btn-danger" style="height:34px;padding:0 12px;">恢复默认 UI 设置</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -4724,6 +5376,145 @@ async function readJsonSafe(resp) {
 const BASE = '';
 let allBuckets = [];
 let currentFilter = 'all';
+let mobileFiltersExpanded = false;
+const PRIMARY_FILTER_KEYS = new Set(['all', 'pinned', 'feel', 'unresolved', 'digested', 'archived']);
+const MOBILE_BUCKET_TAG_LIMIT = 3;
+
+function toggleThemeDropdown(event) {
+  if (event && event.stopPropagation) event.stopPropagation();
+  var dd = document.getElementById('theme-dropdown');
+  if (!dd) return;
+  var open = !dd.classList.contains('open');
+  dd.classList.toggle('open', open);
+  var btn = dd.querySelector('.theme-dropdown-button');
+  if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+function closeThemeDropdown() {
+  var dd = document.getElementById('theme-dropdown');
+  if (!dd) return;
+  dd.classList.remove('open');
+  var btn = dd.querySelector('.theme-dropdown-button');
+  if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+function chooseDashboardTheme(theme) {
+  closeThemeDropdown();
+  setDashboardTheme(theme);
+}
+document.addEventListener('click', function(e) {
+  var dd = document.getElementById('theme-dropdown');
+  if (dd && !dd.contains(e.target)) closeThemeDropdown();
+});
+
+function updateUiRangeLabels() {
+  var dim = document.getElementById('ui-bg-dim');
+  var blur = document.getElementById('ui-bg-blur');
+  var dimLabel = document.getElementById('ui-bg-dim-label');
+  var blurLabel = document.getElementById('ui-bg-blur-label');
+  if (dimLabel && dim) dimLabel.textContent = Number(dim.value || 0.72).toFixed(2);
+  if (blurLabel && blur) blurLabel.textContent = String(parseInt(blur.value || '0', 10)) + 'px';
+}
+function syncUiSettingsControls(settings) {
+  settings = settings || window.OMBRE_UI_SETTINGS || {};
+  var enabled = document.getElementById('ui-bg-enabled');
+  var mascot = document.getElementById('ui-show-mascot');
+  var dim = document.getElementById('ui-bg-dim');
+  var blur = document.getElementById('ui-bg-blur');
+  var pos = document.getElementById('ui-bg-position');
+  if (enabled) enabled.checked = !!settings.background_enabled;
+  if (mascot) mascot.checked = !!settings.show_mascot;
+  if (dim) dim.value = settings.background_dim != null ? settings.background_dim : 0.72;
+  if (blur) blur.value = settings.background_blur != null ? settings.background_blur : 0;
+  if (pos) pos.value = settings.background_position || 'center center';
+  updateUiRangeLabels();
+}
+function collectUiSettingsFromControls() {
+  var enabled = document.getElementById('ui-bg-enabled');
+  var mascot = document.getElementById('ui-show-mascot');
+  var dim = document.getElementById('ui-bg-dim');
+  var blur = document.getElementById('ui-bg-blur');
+  var pos = document.getElementById('ui-bg-position');
+  var current = window.OMBRE_UI_SETTINGS || {};
+  return {
+    background_enabled: enabled ? enabled.checked : !!current.background_enabled,
+    background_dim: dim ? parseFloat(dim.value) : (current.background_dim || 0.72),
+    background_blur: blur ? parseFloat(blur.value) : (current.background_blur || 0),
+    background_position: pos ? pos.value : (current.background_position || 'center center'),
+    show_mascot: mascot ? mascot.checked : !!current.show_mascot
+  };
+}
+function applyUiSettingsFromControls(includeMascot) {
+  var patch = collectUiSettingsFromControls();
+  if (!includeMascot) delete patch.show_mascot;
+  window.applyDashboardUiSettings(Object.assign({}, window.OMBRE_UI_SETTINGS || {}, patch));
+}
+async function saveUiSettingsFromControls() {
+  var msg = document.getElementById('ui-settings-status');
+  var patch = collectUiSettingsFromControls();
+  if (msg) { msg.textContent = '保存中...'; msg.style.color = 'var(--text-dim)'; }
+  try {
+    await window.saveDashboardUiSettings(patch);
+    if (msg) { msg.textContent = '已保存到服务器端 UI 设置'; msg.style.color = 'var(--positive)'; }
+  } catch (e) {
+    if (msg) { msg.textContent = '保存失败：' + (e.message || e); msg.style.color = 'var(--negative)'; }
+  }
+}
+async function uploadUiBackground() {
+  var input = document.getElementById('ui-bg-file');
+  var msg = document.getElementById('ui-settings-status');
+  if (!input || !input.files || !input.files[0]) {
+    if (msg) { msg.textContent = '请选择一张背景图'; msg.style.color = 'var(--warning)'; }
+    return;
+  }
+  var file = input.files[0];
+  if (file.size > 10 * 1024 * 1024) {
+    if (msg) { msg.textContent = '背景图不能超过 10MB'; msg.style.color = 'var(--negative)'; }
+    return;
+  }
+  var fd = new FormData();
+  fd.append('file', file);
+  if (msg) { msg.textContent = '上传中...'; msg.style.color = 'var(--text-dim)'; }
+  try {
+    var resp = await authFetch('/api/ui-settings/background/upload', {method: 'POST', body: fd});
+    if (!resp) return;
+    var data = await readJsonSafe(resp);
+    if (!resp.ok || data.ok === false) throw new Error(data.error || resp.statusText);
+    window.applyDashboardUiSettings(data.settings || Object.assign({}, window.OMBRE_UI_SETTINGS || {}, {
+      background_url: data.url,
+      background_enabled: true
+    }));
+    if (msg) { msg.textContent = '背景图已上传并启用'; msg.style.color = 'var(--positive)'; }
+  } catch (e) {
+    if (msg) { msg.textContent = '上传失败：' + (e.message || e); msg.style.color = 'var(--negative)'; }
+  }
+}
+async function clearUiBackground() {
+  var msg = document.getElementById('ui-settings-status');
+  try {
+    await window.saveDashboardUiSettings({background_enabled: false, background_url: null});
+    if (msg) { msg.textContent = '背景图已关闭'; msg.style.color = 'var(--positive)'; }
+  } catch (e) {
+    if (msg) { msg.textContent = '关闭失败：' + (e.message || e); msg.style.color = 'var(--negative)'; }
+  }
+}
+async function resetUiSettings() {
+  if (!confirm('恢复默认 UI 设置？这会关闭背景图和小鸡，并切回 Umi Purple。')) return;
+  var defaults = {
+    theme: 'umi-purple',
+    background_enabled: false,
+    background_url: null,
+    background_dim: 0.72,
+    background_blur: 0,
+    background_position: 'center center',
+    show_mascot: false
+  };
+  var msg = document.getElementById('ui-settings-status');
+  try {
+    await window.saveDashboardUiSettings(defaults);
+    if (msg) { msg.textContent = '已恢复默认 UI 设置'; msg.style.color = 'var(--positive)'; }
+  } catch (e) {
+    if (msg) { msg.textContent = '恢复失败：' + (e.message || e); msg.style.color = 'var(--negative)'; }
+  }
+}
 
 function cssVar(name, fallback) {
   var value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -4825,6 +5616,7 @@ function buildFilters() {
   const domains = new Set();
   allBuckets.forEach(b => (b.domain || []).forEach(d => domains.add(d)));
   const filters = document.getElementById('filters');
+  if (!filters) return;
   const types = [
     { key: 'all', label: '全部' },
     { key: 'pinned', label: '<i data-lucide="pin"></i> 钉选' },
@@ -4833,20 +5625,40 @@ function buildFilters() {
     { key: 'digested', label: '<i data-lucide="leaf"></i> 已消化' },
     { key: 'archived', label: '<i data-lucide="archive"></i> 归档' },
   ];
+  const selectedDomain = currentFilter && currentFilter.startsWith('domain:') ? currentFilter.slice(7) : '';
+  const domainList = Array.from(domains).slice(0, 10);
+  if (selectedDomain && domains.has(selectedDomain) && !domainList.includes(selectedDomain)) {
+    domainList.push(selectedDomain);
+  }
+  const extraHiddenCount = selectedDomain && domainList.includes(selectedDomain)
+    ? Math.max(domainList.length - 1, 0)
+    : domainList.length;
+  filters.classList.toggle('filters-expanded', mobileFiltersExpanded);
   filters.innerHTML = types.map(function(t) {
-    return '<button class="filter-btn ' + (t.key === 'all' ? 'active' : '') + '" data-filter="' + t.key + '">' + t.label + '</button>';
-  }).join('') + Array.from(domains).slice(0, 10).map(function(d) {
-    return '<button class="filter-btn" data-filter="domain:' + d + '">' + d + '</button>';
-  }).join('');
+    return '<button type="button" class="filter-btn filter-primary ' + (t.key === currentFilter ? 'active' : '') + '" data-filter="' + t.key + '">' + t.label + '</button>';
+  }).join('') + domainList.map(function(d) {
+    var filterKey = 'domain:' + d;
+    var selectedHiddenClass = filterKey === currentFilter ? ' filter-selected-hidden' : '';
+    return '<button type="button" class="filter-btn filter-extra' + selectedHiddenClass + (filterKey === currentFilter ? ' active' : '') + '" data-filter="' + filterKey + '">' + esc(d) + '</button>';
+  }).join('') + (domainList.length
+    ? '<button type="button" class="filter-btn filter-toggle" data-filter-toggle="mobile">' + (mobileFiltersExpanded ? '收起标签' : '更多 ' + extraHiddenCount + ' 个') + '</button>'
+    : '');
 
-  filters.addEventListener('click', function(e) {
+  filters.onclick = function(e) {
+    var toggle = e.target.closest('[data-filter-toggle]');
+    if (toggle) {
+      mobileFiltersExpanded = !mobileFiltersExpanded;
+      buildFilters();
+      return;
+    }
     var btn = e.target.closest('.filter-btn');
-    if (!btn) return;
+    if (!btn || !btn.dataset.filter) return;
     filters.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
     btn.classList.add('active');
     currentFilter = btn.dataset.filter;
     renderBuckets(filterBuckets(allBuckets));
-  });
+  };
+  if (window.lucide) lucide.createIcons();
 }
 
 function filterBuckets(buckets) {
@@ -4861,6 +5673,24 @@ function filterBuckets(buckets) {
     return buckets.filter(function(b) { return (b.domain || []).includes(d); });
   }
   return buckets;
+}
+
+function toggleBucketTags(button) {
+  var row = button && button.closest ? button.closest('.bucket-row') : null;
+  if (!row) return;
+  row.classList.toggle('tags-expanded');
+}
+
+function renderBucketRowTags(b, vPos, modelV) {
+  var domains = b.domain || [];
+  var domainHtml = domains.map(function(d, idx) {
+    return '<span class="domain-pill bucket-tag-pill' + (idx >= MOBILE_BUCKET_TAG_LIMIT ? ' mobile-extra-tag' : '') + '">' + esc(d) + '</span>';
+  }).join('');
+  var moreHtml = domains.length > MOBILE_BUCKET_TAG_LIMIT
+    ? '<button type="button" class="bucket-tag-more" onclick="event.stopPropagation(); toggleBucketTags(this)" aria-label="展开标签"><span class="more-label">+' + (domains.length - MOBILE_BUCKET_TAG_LIMIT) + '</span><span class="less-label">收起</span></button>'
+    : '';
+  var emotionHtml = '<span class="emotion" style="display:inline-flex;align-items:center;gap:3px;"><span class="v-bar"><span class="v-dot" style="left:' + vPos + '%"></span></span>' + modelV + '</span>';
+  return domainHtml + moreHtml + emotionHtml + '<span class="score">' + (b.score != null ? b.score.toFixed(2) : '—') + '</span>';
 }
 
 function renderBuckets(buckets) {
@@ -4898,19 +5728,14 @@ function renderBuckets(buckets) {
       ? '<input type="checkbox" class="purge-chk" data-id="' + b.id + '" data-name="' + esc(b.name) + '" onchange="purgeUpdateCount()" onclick="event.stopPropagation()" style="accent-color:var(--accent);margin-right:4px;flex-shrink:0;">'
       : '';
     var rowClick = _purgeMode ? 'onclick="purgeToggleRow(this)"' : 'onclick="showDetail(\'' + b.id + '\')"';
-    var domainHtml = (b.domain || []).length
-      ? '<span class="domain-pill">' + esc((b.domain || []).join(', ')) + '</span>'
-      : '';
-    var emotionHtml = '<span class="emotion" style="display:inline-flex;align-items:center;gap:3px;"><span class="v-bar"><span class="v-dot" style="left:' + vPos + '%"></span></span>' + modelV + '</span>';
+    var tagsHtml = renderBucketRowTags(b, vPos, modelV);
     return '<div class="' + rowCls + '" data-id="' + esc(b.id) + '" ' + rowClick + ' style="cursor:pointer;' + inlineStyle + '">' +
       '<div class="bucket-row-top">' +
         purgeChk +
         '<span class="' + iconCls + '">' + iconHtml + '</span>' +
         '<span class="name" title="' + esc(b.name) + '">' + esc(b.name) + firstBadge + '</span>' +
         '<div class="bucket-row-tags">' +
-          domainHtml +
-          emotionHtml +
-          '<span class="score">' + (b.score != null ? b.score.toFixed(2) : '—') + '</span>' +
+          tagsHtml +
         '</div>' +
         '<span class="time">' + timeAgo + '</span>' +
       '</div>' +
