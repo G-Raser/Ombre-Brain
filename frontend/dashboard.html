@@ -5833,7 +5833,7 @@ function renderReviewCandidate(item) {
             '<span class="review-meta-pill">type: ' + reviewValue(item.suggested_type) + '</span>' +
             '<span class="review-meta-pill">importance: ' + reviewValue(item.suggested_importance) + '</span>' +
           '</div>' +
-          '<div class="review-card-title">' + reviewValue(item.title) + '</div>' +
+          '<div class="review-card-title">' + reviewValue(item.display_title || item.title) + '</div>' +
           '<div class="review-card-grid">' +
             reviewField('tags', reviewTags(item.tags)) +
             reviewField('created_by', reviewValue(item.created_by)) +
@@ -5867,7 +5867,8 @@ async function loadReviewDetail(id) {
     var c = data.candidate || {};
     var fm = c.frontmatter || {};
     var summaryRows =
-      reviewField('title', reviewValue(c.title || fm.title)) +
+      reviewField('title', reviewValue(c.display_title || c.title || fm.title)) +
+      reviewField('display_time', reviewValue(c.display_time || fm.display_time)) +
       reviewField('status', reviewValue(c.status || fm.status)) +
       reviewField('suggested_type', reviewValue(c.suggested_type || fm.suggested_type)) +
       reviewField('suggested_importance', reviewValue(c.suggested_importance || fm.suggested_importance)) +

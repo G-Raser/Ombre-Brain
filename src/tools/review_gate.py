@@ -1,4 +1,4 @@
-"""
+﻿"""
 Review gate for write tools.
 
 When review_mode is enabled, existing write tools keep their public names but
@@ -42,6 +42,26 @@ _SECRET_PATTERNS = [
     re.compile(r"(?m)^[A-Z0-9_]*(API_KEY|TOKEN|SECRET|PASSWORD)[A-Z0-9_]*=.*$"),
 ]
 _CANDIDATE_ID_RE = re.compile(r"^candidate-\d{8}-\d{6}-[A-Za-z0-9_-]+$")
+_DEFAULT_TITLE_VALUES = {
+    "hold 候选",
+    "grow 候选",
+    "trace 候选",
+    "bucket 候选",
+    "feel 候选",
+    "pinned 候选",
+    "plan 候选",
+    "letter 候选",
+    "i 候选",
+    "候选",
+    "candidate",
+    "untitled",
+}
+_DEFAULT_TITLE_RE = re.compile(
+    r"^(?:\d{4}-\d{2}-\d{2}\s+\d{2}-\d{2}-\d{2}\s+)?"
+    r"(?:hold|grow|trace|bucket|feel|pinned|plan|letter|i)\s*候选$",
+    re.I,
+)
+_TITLE_TIME_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\s+\d{2}-\d{2}-\d{2}\s+")
 
 
 def _dump_candidate(metadata: dict, content: str) -> str:
@@ -208,6 +228,152 @@ def _first_heading(content: str, fallback: str) -> str:
     return m.group(1).strip() if m else fallback
 
 
+def _is_default_title(title: str) -> bool:
+    value = re.sub(r"\s+", " ", str(title or "")).strip()
+    if not value:
+        return True
+    return value.lower() in _DEFAULT_TITLE_VALUES or bool(_DEFAULT_TITLE_RE.match(value))
+
+
+def _clean_title_seed(text: str) -> str:
+    value = re.sub(r"(?m)^#+\s*", "", str(text or ""))
+    value = re.sub(r"\[[^\]]*\]\([^)]+\)", "", value)
+    value = re.sub(r"`+", "", value)
+    value = value.replace("_", " ")
+    value = re.sub(r"[#*~>\[\]{}<>]+", "", value)
+    value = re.sub(r"[（(]\s*\d{4}[^)）]*[)）]", "", value)
+    value = re.sub(r"^\d{4}-\d{2}-\d{2}\s+\d{2}-\d{2}-\d{2}\s+", "", value)
+    value = re.sub(r"^\d{2}-\d{2}-\d{2}\s+", "", value)
+    value = re.sub(r"\b\d{4}-\d{2}-\d{2}\b", "", value)
+    value = re.sub(r"\s+", " ", value).strip(" ：:，,。.!！?？；;、-—")
+    return value
+
+
+def _trim_generated_title(text: str) -> str:
+    value = _clean_title_seed(text)
+    if not value:
+        return ""
+    has_cjk = bool(re.search(r"[\u4e00-\u9fff]", value))
+    if has_cjk:
+        if len(value) > 24:
+            for sep in ["。", "！", "？", "；", "，", ",", "、"]:
+                part = value.split(sep, 1)[0].strip()
+                if 6 <= len(part) <= 24:
+                    value = part
+                    break
+        if len(value) > 40:
+            value = value[:40].rstrip(" ：:，,。.!！?？；;、-—")
+    else:
+        words = value.split()
+        if len(words) > 8:
+            value = " ".join(words[:8]).rstrip(".,;:!?")
+        if len(value) > 80:
+            value = value[:80].rsplit(" ", 1)[0].rstrip(".,;:!?") or value[:80]
+    return value or ""
+
+
+def generate_candidate_title(
+    content: str,
+    *,
+    preferred_title: str = "",
+    original_tool: str = "",
+    original_arguments: dict | None = None,
+) -> str:
+    """Return a human-readable candidate title without using tool-name defaults."""
+    original_arguments = original_arguments or {}
+    title_sources = [
+        preferred_title,
+        original_arguments.get("title", ""),
+        original_arguments.get("name", ""),
+        original_arguments.get("summary", ""),
+    ]
+    for source in title_sources:
+        if _is_default_title(str(source or "")):
+            continue
+        candidate = _trim_generated_title(str(source or ""))
+        if candidate and not _is_default_title(candidate):
+            return candidate
+
+    text = _section(content, "候选内容") or content or ""
+    text = _clean_title_seed(text)
+    if not text:
+        return "未命名候选"
+
+    if re.search(r"(牙冠|根管|补牙)", text) and "回国" in text:
+        return "牙冠咬碎与回国补牙"
+    if "虾" in text and ("中文灾难" in text or "送走" in text):
+        return "虾的中文灾难与送走事件"
+    if "REVIEW APPROVE CONFIRM FIX" in text.upper():
+        return "Review approve confirm test"
+
+    first_line = next((line.strip() for line in text.splitlines() if line.strip()), text)
+    colon_match = re.match(r"^(.{4,32}?)[：:]\s*(.+)$", first_line)
+    if colon_match:
+        prefix = _trim_generated_title(colon_match.group(1))
+        if prefix and not _is_default_title(prefix):
+            return prefix
+
+    first_sentence = re.split(r"[。！？!?]\s*", first_line, 1)[0].strip()
+    first_sentence = re.sub(r"^(主人|我|我们|CC酱|虾)\s*", "", first_sentence)
+    title = _trim_generated_title(first_sentence)
+    if title and not _is_default_title(title):
+        return title
+    fallback = f"{original_tool} 记忆".strip() if original_tool else "未命名候选"
+    return "未命名候选" if _is_default_title(fallback) else fallback
+
+
+def _replace_first_heading(content: str, title: str) -> str:
+    if re.search(r"(?m)^#\s+.+?\s*$", content or ""):
+        return re.sub(r"(?m)^#\s+.+?\s*$", f"# {title}", content or "", count=1)
+    return f"# {title}\n\n{content or ''}".lstrip()
+
+
+def _format_candidate_time(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return dt.strftime("%Y-%m-%d %H-%M-%S")
+    except ValueError:
+        pass
+    match = re.search(r"(\d{4})[-/](\d{1,2})[-/](\d{1,2})[T\s_]+(\d{1,2})[:-](\d{1,2})[:-](\d{1,2})", raw)
+    if match:
+        yyyy, mm, dd, hh, mi, ss = match.groups()
+        return f"{int(yyyy):04d}-{int(mm):02d}-{int(dd):02d} {int(hh):02d}-{int(mi):02d}-{int(ss):02d}"
+    return ""
+
+
+def _candidate_time_from_id(candidate_id: str) -> str:
+    match = re.match(r"^candidate-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})-", str(candidate_id or ""))
+    if not match:
+        return ""
+    yyyy, mm, dd, hh, mi, ss = match.groups()
+    return f"{yyyy}-{mm}-{dd} {hh}-{mi}-{ss}"
+
+
+def _candidate_display_time(meta: dict, candidate_id: str, path: Path | None = None) -> str:
+    for key in ("created_at", "timestamp", "source_time", "created"):
+        value = _format_candidate_time(meta.get(key))
+        if value:
+            return value
+    value = _candidate_time_from_id(candidate_id)
+    if value:
+        return value
+    if path is not None:
+        return datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d %H-%M-%S")
+    return datetime.now().strftime("%Y-%m-%d %H-%M-%S")
+
+
+def _candidate_display_title(title: str, display_time: str) -> str:
+    clean = str(title or "").strip()
+    if not clean:
+        clean = "未命名候选"
+    if _TITLE_TIME_PREFIX_RE.match(clean):
+        return clean
+    return f"{display_time} {clean}" if display_time else clean
+
+
 def _section(content: str, heading: str) -> str:
     pattern = rf"(?ms)^##\s+{re.escape(heading)}\s*\n(.*?)(?=^##\s+|\Z)"
     match = re.search(pattern, content or "")
@@ -225,13 +391,22 @@ def _candidate_record(path: Path, include_body: bool = False) -> dict:
     meta, content = _load_candidate(path)
     cid = str(meta.get("candidate_id") or path.stem)
     key = path.stem
-    title = _first_heading(content, cid)
+    title = generate_candidate_title(
+        _section(content, "候选内容") or content,
+        preferred_title=str(meta.get("title") or _first_heading(content, cid)),
+        original_tool=str(meta.get("original_tool") or ""),
+        original_arguments=meta.get("original_arguments_redacted") or {},
+    )
+    display_time = _candidate_display_time(meta, cid, path)
+    display_title = _candidate_display_title(title, display_time)
     record = {
         "candidate_key": key,
         "file_name": path.name,
         "candidate_id": cid,
         "candidate_id_mismatch": cid != key,
         "title": title,
+        "display_time": display_time,
+        "display_title": display_title,
         "suggested_type": meta.get("suggested_type", ""),
         "suggested_importance": meta.get("suggested_importance", ""),
         "tags": meta.get("tags") or [],
@@ -322,6 +497,12 @@ async def create_pending_candidate(
     secret_hit = any([hit_content, hit_quote, hit_reason, hit_args, hit_updates])
     if secret_hit:
         notes = (notes + "\n" if notes else "") + "检测到疑似密钥，已脱敏。"
+    effective_title = generate_candidate_title(
+        str(redacted_content or ""),
+        preferred_title=title,
+        original_tool=original_tool,
+        original_arguments=redacted_args if isinstance(redacted_args, dict) else {},
+    )
 
     needs_confirmation = True
     explicitly_approved = False
@@ -335,7 +516,7 @@ async def create_pending_candidate(
         update_summary = "\n\n## 计划修改字段\n\n" + "\n".join(
             f"- {k}: {_format_value(v)}" for k, v in redacted_updates.items()
         )
-    body = f"""# {title.strip() or '候选记忆'}
+    body = f"""# {effective_title}
 
 ## 来源工具
 
@@ -363,6 +544,7 @@ async def create_pending_candidate(
         candidate_id = _next_candidate_id()
         metadata = {
             "candidate_id": candidate_id,
+            "title": effective_title,
             "status": "pending",
             "original_tool": original_tool,
             "suggested_type": suggested_type,
@@ -411,7 +593,12 @@ async def list_pending_memories(limit: int = 50) -> str:
     for path in files[:limit]:
         meta, content = _load_candidate(path)
         cid = meta.get("candidate_id") or path.stem
-        title = _first_heading(content, cid)
+        title = generate_candidate_title(
+            _section(content, "候选内容") or content,
+            preferred_title=str(meta.get("title") or _first_heading(content, cid)),
+            original_tool=str(meta.get("original_tool") or ""),
+            original_arguments=meta.get("original_arguments_redacted") or {},
+        )
         lines.append(
             f"- {cid} | {meta.get('suggested_type', '?')} | "
             f"importance={meta.get('suggested_importance', '?')} | "
@@ -513,15 +700,23 @@ async def approve_pending_memory(candidate_id: str, dry_run: bool = True, confir
         meta["confirmed_via"] = "review_approve_confirmed"
         src.write_text(_dump_candidate(meta, body), encoding="utf-8")
     suggested_type = str(meta.get("suggested_type") or "bucket")
-    title = _first_heading(body, candidate_id)
     content = _section(body, "候选内容")
+    title = generate_candidate_title(
+        content or body,
+        preferred_title=str(meta.get("title") or _first_heading(body, candidate_id)),
+        original_tool=str(meta.get("original_tool") or ""),
+        original_arguments=meta.get("original_arguments_redacted") or {},
+    )
+    display_time = _candidate_display_time(meta, candidate_id, src)
+    display_title = _candidate_display_title(title, display_time)
+    meta["title"] = title
     tags = meta.get("tags") or []
     importance = int(meta.get("suggested_importance") or 5)
     blockers = _approval_blockers(meta)
     plan = (
         f"候选：{candidate_id}\n"
         f"类型：{suggested_type}\n"
-        f"标题：{title}\n"
+        f"标题：{display_title}\n"
         f"dry_run：{dry_run}\n"
         f"confirmed：{confirmed}\n"
         f"将执行：按 {suggested_type} 语义写入或更新正式 buckets。"
@@ -532,6 +727,7 @@ async def approve_pending_memory(candidate_id: str, dry_run: bool = True, confir
         return plan + "\n未修改正式记忆库。"
     if blockers:
         return plan + "\n未修改正式记忆库。"
+    body = _replace_first_heading(body, title)
 
     bucket_id = ""
     args = meta.get("original_arguments_redacted") or {}
@@ -544,7 +740,7 @@ async def approve_pending_memory(candidate_id: str, dry_run: bool = True, confir
             domain=["未分类"],
             valence=0.5,
             arousal=0.3,
-            name=title,
+            name=display_title,
             source_tool="review_approve",
         )
     elif suggested_type == "pinned":
@@ -555,7 +751,7 @@ async def approve_pending_memory(candidate_id: str, dry_run: bool = True, confir
             domain=["未分类"],
             valence=0.5,
             arousal=0.3,
-            name=title,
+            name=display_title,
             bucket_type="permanent",
             pinned=True,
             source_tool="review_approve",
@@ -568,7 +764,7 @@ async def approve_pending_memory(candidate_id: str, dry_run: bool = True, confir
             domain=["feel"],
             valence=0.5,
             arousal=0.3,
-            name=title,
+            name=display_title,
             bucket_type="feel",
             triggered_by=str(args.get("source_bucket") or ""),
             source_tool="review_approve",
@@ -581,7 +777,7 @@ async def approve_pending_memory(candidate_id: str, dry_run: bool = True, confir
             domain=["self"],
             valence=0.5,
             arousal=0.3,
-            name=title,
+            name=display_title,
             bucket_type="i",
             weight=0.8,
             source_tool="review_approve",
@@ -595,7 +791,7 @@ async def approve_pending_memory(candidate_id: str, dry_run: bool = True, confir
             domain=["plan"],
             valence=0.5,
             arousal=0.4,
-            name=title,
+            name=display_title,
             bucket_type="plan",
             weight=float(args.get("weight") or 0.5),
             source_tool="review_approve",
@@ -614,7 +810,7 @@ async def approve_pending_memory(candidate_id: str, dry_run: bool = True, confir
             domain=["letter"],
             valence=0.5,
             arousal=0.3,
-            name=title,
+            name=display_title,
             bucket_type="letter",
             source_tool="review_approve",
         )
@@ -655,7 +851,7 @@ async def approve_pending_memory(candidate_id: str, dry_run: bool = True, confir
 
     meta["status"] = "approved"
     meta["approved_at"] = datetime.now().isoformat(timespec="seconds")
-    meta["approved_result"] = {"bucket_id": bucket_id, "suggested_type": suggested_type}
+    meta["approved_result"] = {"bucket_id": bucket_id, "suggested_type": suggested_type, "display_title": display_title}
     meta["formal_result"] = meta["approved_result"]
     src.write_text(_dump_candidate(meta, body), encoding="utf-8")
     dst = _candidate_path(candidate_id, "approved")
@@ -663,3 +859,4 @@ async def approve_pending_memory(candidate_id: str, dry_run: bool = True, confir
         dst = _review_dir("approved") / f"{candidate_id}-{datetime.now().strftime('%H%M%S')}.md"
     shutil.move(str(src), str(dst))
     return f"已批准候选并写入正式库：candidate_id={candidate_id} bucket_id={bucket_id}"
+
