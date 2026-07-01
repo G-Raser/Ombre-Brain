@@ -1582,6 +1582,7 @@
     right: 0;
     top: 0;
     width: 460px;
+    max-width: 100vw;
     height: 100vh;
     background: var(--surface-solid);
     z-index: 300;
@@ -1665,6 +1666,7 @@
   .self-panel-body {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 16px 24px 32px;
     display: flex;
     flex-direction: column;
@@ -1678,11 +1680,14 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+    min-width: 0;
   }
   .self-entry-meta {
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
+    min-width: 0;
   }
   .self-entry-aspect {
     font-family: 'Share Tech Mono', monospace;
@@ -1705,6 +1710,9 @@
     line-height: 1.75;
     color: var(--text);
     white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: normal;
+    min-width: 0;
   }
   .self-panel-empty {
     text-align: center;
@@ -1910,6 +1918,113 @@
       padding: 10px 14px 8px;
       scroll-snap-align: start;
       touch-action: manipulation;
+    }
+
+    .self-fab {
+      width: 48px;
+      height: 48px;
+      left: 14px;
+      bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    }
+    .self-fab .fab-label {
+      font-size: 24px;
+      letter-spacing: 0;
+    }
+    .self-panel {
+      width: calc(100vw - 20px);
+      max-width: calc(100vw - 20px);
+      height: calc(100dvh - 20px);
+      max-height: calc(100dvh - 20px);
+      top: 10px;
+      right: 10px;
+      border-radius: 14px;
+      overflow: hidden;
+      box-sizing: border-box;
+      box-shadow: 0 10px 34px rgba(44,42,38,0.28);
+    }
+    .self-panel-header {
+      padding: 14px 14px 12px;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .self-panel-title {
+      font-size: 24px;
+      line-height: 1.1;
+    }
+    .self-panel-subtitle {
+      font-size: 10px;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+    .self-panel-close {
+      width: 42px;
+      height: 42px;
+      margin-top: -4px;
+    }
+    .self-panel-filters {
+      padding: 10px 12px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      gap: 8px;
+    }
+    .self-filter-btn {
+      flex: 0 0 auto;
+      min-height: 40px;
+      padding: 8px 12px;
+      font-size: 12px;
+      max-width: min(58vw, 180px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      touch-action: manipulation;
+    }
+    .self-panel-body {
+      padding: 12px 12px calc(18px + env(safe-area-inset-bottom, 0px));
+      gap: 12px;
+      overflow-x: hidden;
+    }
+    .self-entry {
+      padding: 14px 13px;
+      border-radius: 8px;
+      gap: 10px;
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+    .self-entry-meta {
+      align-items: flex-start;
+      gap: 7px;
+    }
+    .self-entry-aspect {
+      max-width: 100%;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      line-height: 1.35;
+      font-size: 11px;
+      letter-spacing: 0.4px;
+      padding: 4px 8px;
+    }
+    .self-entry-time {
+      margin-left: 0;
+      width: 100%;
+      font-size: 11px;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+    .self-entry-content {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 15px;
+      line-height: 1.78;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+      word-break: normal;
+    }
+    .self-panel-empty {
+      padding: 36px 12px;
+      font-size: 14px;
+      line-height: 1.7;
+      overflow-wrap: break-word;
     }
 
     .content {
