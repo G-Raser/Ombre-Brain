@@ -5821,35 +5821,90 @@ function cssVar(name, fallback) {
   return value || fallback;
 }
 
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    const target = tab.dataset.tab;
-    document.getElementById('list-view').style.display = target === 'list' ? '' : 'none';
-    document.getElementById('breath-view').style.display = target === 'breath' ? '' : 'none';
-    document.getElementById('network-view').style.display = target === 'network' ? '' : 'none';
-    document.getElementById('tools-view').style.display = target === 'tools' ? '' : 'none';
-    document.getElementById('plan-view').style.display = target === 'plan' ? '' : 'none';
-    document.getElementById('import-view').style.display = target === 'import' ? '' : 'none';
-    document.getElementById('review-view').style.display = target === 'review' ? '' : 'none';
-    document.getElementById('journal-view').style.display = target === 'journal' ? '' : 'none';
-    document.getElementById('logs-view').style.display = target === 'logs' ? '' : 'none';
-    document.getElementById('v3-debug-view').style.display = target === 'v3-debug' ? '' : 'none';
-    document.getElementById('settings-view').style.display = target === 'settings' ? '' : 'none';
-    document.getElementById('letters-view').style.display = target === 'letters' ? '' : 'none';
-    document.getElementById('anchors-view').style.display = target === 'anchors' ? '' : 'none';
-    document.getElementById('about-view').style.display = target === 'about' ? '' : 'none';
-    if (target !== 'network' && _netRAF) { cancelAnimationFrame(_netRAF); _netRAF = null; }
-    if (target === 'network') loadNetwork();
-    if (target === 'tools') loadToolsPanel();
-    if (target === 'plan') loadPlans();
-    if (target === 'import') { pollImportStatus(); loadImportResults(); }
-    if (target === 'review') loadReviewQueue();
-    if (target === 'journal') loadJournals();
-    if (target === 'logs') { loadLogs(); loadOBErrors(); }
-    if (target === 'v3-debug') loadV3Debug();
-    if (target === 'settings') {
+const DASHBOARD_HASH_TO_TAB = {
+  buckets: 'list',
+  list: 'list',
+  breath: 'breath',
+  'breath-trace': 'breath',
+  network: 'network',
+  toolbox: 'tools',
+  tools: 'tools',
+  plans: 'plan',
+  plan: 'plan',
+  letters: 'letters',
+  journal: 'journal',
+  anchors: 'anchors',
+  import: 'import',
+  review: 'review',
+  logs: 'logs',
+  settings: 'settings',
+  replay: 'v3-debug',
+  'v3-debug': 'v3-debug',
+  about: 'about'
+};
+const DASHBOARD_TAB_TO_HASH = {
+  list: 'buckets',
+  breath: 'breath',
+  network: 'network',
+  tools: 'toolbox',
+  plan: 'plans',
+  letters: 'letters',
+  journal: 'journal',
+  anchors: 'anchors',
+  import: 'import',
+  review: 'review',
+  logs: 'logs',
+  settings: 'settings',
+  'v3-debug': 'replay',
+  about: 'about'
+};
+
+function normalizeDashboardHash(hash) {
+  var key = String(hash || '').replace(/^#/, '').trim().toLowerCase();
+  return DASHBOARD_HASH_TO_TAB[key] || '';
+}
+
+function setDashboardHashForTab(target, replace) {
+  var hash = DASHBOARD_TAB_TO_HASH[target] || 'buckets';
+  var next = '#' + hash;
+  if (location.hash === next) return;
+  if (replace && history.replaceState) {
+    history.replaceState(null, '', next);
+  } else {
+    location.hash = hash;
+  }
+}
+
+function switchDashboardTab(target, options) {
+  options = options || {};
+  if (!document.querySelector('.tab[data-tab="' + target + '"]')) target = 'list';
+  document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+  var activeTab = document.querySelector('.tab[data-tab="' + target + '"]');
+  if (activeTab) activeTab.classList.add('active');
+  document.getElementById('list-view').style.display = target === 'list' ? '' : 'none';
+  document.getElementById('breath-view').style.display = target === 'breath' ? '' : 'none';
+  document.getElementById('network-view').style.display = target === 'network' ? '' : 'none';
+  document.getElementById('tools-view').style.display = target === 'tools' ? '' : 'none';
+  document.getElementById('plan-view').style.display = target === 'plan' ? '' : 'none';
+  document.getElementById('import-view').style.display = target === 'import' ? '' : 'none';
+  document.getElementById('review-view').style.display = target === 'review' ? '' : 'none';
+  document.getElementById('journal-view').style.display = target === 'journal' ? '' : 'none';
+  document.getElementById('logs-view').style.display = target === 'logs' ? '' : 'none';
+  document.getElementById('v3-debug-view').style.display = target === 'v3-debug' ? '' : 'none';
+  document.getElementById('settings-view').style.display = target === 'settings' ? '' : 'none';
+  document.getElementById('letters-view').style.display = target === 'letters' ? '' : 'none';
+  document.getElementById('anchors-view').style.display = target === 'anchors' ? '' : 'none';
+  document.getElementById('about-view').style.display = target === 'about' ? '' : 'none';
+  if (target !== 'network' && _netRAF) { cancelAnimationFrame(_netRAF); _netRAF = null; }
+  if (target === 'network') loadNetwork();
+  if (target === 'tools') loadToolsPanel();
+  if (target === 'plan') loadPlans();
+  if (target === 'import') { pollImportStatus(); loadImportResults(); }
+  if (target === 'review') loadReviewQueue();
+  if (target === 'journal') loadJournals();
+  if (target === 'logs') { loadLogs(); loadOBErrors(); }
+  if (target === 'v3-debug') loadV3Debug();
+  if (target === 'settings') {
       // 任务D：合并 config + settings 后，切换到「设置」时一次性加载所有面板数据
       loadSettingsStatus();
       loadHumanName();
@@ -5864,12 +5919,34 @@ document.querySelectorAll('.tab').forEach(tab => {
       const _mcpOriginEl = document.getElementById('mcp-local-origin');
       if (_mcpOriginEl) _mcpOriginEl.textContent = location.origin;
       renderMcpUrls();
-    }
-    if (target === 'letters') loadLetters();
-    if (target === 'anchors') loadAnchorsView();
-    if (target === 'about') loadAbout();
+  }
+  if (target === 'letters') loadLetters();
+  if (target === 'anchors') loadAnchorsView();
+  if (target === 'about') loadAbout();
+  if (options.updateHash !== false) setDashboardHashForTab(target, true);
+}
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    switchDashboardTab(tab.dataset.tab || 'list', { updateHash: true });
   });
 });
+
+window.addEventListener('hashchange', function() {
+  var target = normalizeDashboardHash(location.hash);
+  if (!target) {
+    target = 'list';
+    setDashboardHashForTab(target, true);
+  }
+  switchDashboardTab(target, { updateHash: false });
+});
+
+var _initialDashboardTab = normalizeDashboardHash(location.hash);
+if (!_initialDashboardTab) {
+  _initialDashboardTab = 'list';
+  setDashboardHashForTab(_initialDashboardTab, true);
+}
+switchDashboardTab(_initialDashboardTab, { updateHash: false });
 
 let searchTimer;
 document.getElementById('search-input').addEventListener('input', (e) => {
@@ -10284,11 +10361,6 @@ pollHeartbeat();
 pollCriticalErrors();
 _errorAlertTimer = setInterval(pollCriticalErrors, 60000);
 maybeShowOnboarding();
-// 支持 #letters 锚点直达（老书签从 /letters → / #letters 时自动切换）
-if (location.hash === '#letters') {
-  const t = document.querySelector('.tab[data-tab="letters"]');
-  if (t) t.click();
-}
 
 // ── 给作者反馈 ──────────────────────────────────────────────
 async function openFeedback() {
