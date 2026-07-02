@@ -201,18 +201,146 @@ def _redact_text(value: Any) -> tuple[Any, bool]:
     return redacted, changed
 
 
-def _cap_importance(suggested_type: str, importance: int, reason: str) -> tuple[int, str]:
+def _parse_importance(value: Any) -> int:
+    if isinstance(value, bool):
+        raise ValueError("importance 必须是数字")
     try:
-        value = max(1, min(10, int(importance)))
+        return int(value)
+    except (TypeError, ValueError) as e:
+        raise ValueError("importance 必须是数字") from e
+
+
+def _clamp_importance(value: Any, default: int = 5) -> int:
+    try:
+        parsed = _parse_importance(value)
+    except ValueError:
+        parsed = default
+    return max(1, min(10, parsed))
+
+
+def clamp_importance(value: Any, default: int = 5) -> int:
+    return _clamp_importance(value, default=default)
+
+
+def clamp_float01(value: Any, default: float) -> float:
+    if isinstance(value, bool):
+        return default
+    try:
+        parsed = float(value)
     except (TypeError, ValueError):
-        value = 5
-    t = suggested_type or "bucket"
-    if t == "bucket" and value > 6:
-        extra = "普通 hold / grow 候选默认不超过 6；原始重要度已在 pending 阶段降为 6。"
-        return 6, f"{reason}\n{extra}".strip()
-    if t == "update" and value > 6 and not reason.strip():
-        return 6, "普通 update 候选默认不超过 6；原始重要度已在 pending 阶段降为 6。"
+        return default
+    return max(0.0, min(1.0, parsed))
+
+
+def normalize_tags(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        raw_items = value.split(",")
+    elif isinstance(value, (list, tuple, set)):
+        raw_items = value
+    else:
+        raw_items = [value]
+    out = []
+    seen = set()
+    for item in raw_items:
+        text = str(item).strip()
+        if not text or text in seen:
+            continue
+        out.append(text)
+        seen.add(text)
+    return out
+
+
+def normalize_domain(value: Any, default: list[str] | None = None) -> list[str]:
+    fallback = list(default or ["未分类"])
+    if value is None:
+        return fallback
+    if isinstance(value, str):
+        raw_items = value.split(",")
+    elif isinstance(value, (list, tuple, set)):
+        raw_items = value
+    else:
+        raw_items = [value]
+    out = []
+    seen = set()
+    for item in raw_items:
+        text = str(item).strip()
+        if not text or text in seen:
+            continue
+        out.append(text)
+        seen.add(text)
+    return out or fallback
+
+
+def pick_meta_arg(meta: dict, args: dict, key: str, default: Any = None) -> Any:
+    if isinstance(meta, dict) and key in meta and meta.get(key) is not None:
+        return meta.get(key)
+    if isinstance(args, dict) and key in args and args.get(key) is not None:
+        return args.get(key)
+    return default
+
+
+def _pick_float01(meta: dict, args: dict, key: str, default: float) -> float:
+    value = pick_meta_arg(meta, args, key, None)
+    if value in (None, "", -1, "-1"):
+        return default
+    return clamp_float01(value, default)
+
+
+def record_adjustment(meta: dict, field: str, requested: Any, final: Any, reason: str) -> None:
+    if requested == final:
+        return
+    adjustments = meta.setdefault("field_adjustments", [])
+    if not isinstance(adjustments, list):
+        adjustments = []
+        meta["field_adjustments"] = adjustments
+    adjustments.append(
+        {
+            "field": field,
+            "requested": requested,
+            "final": final,
+            "reason": reason,
+        }
+    )
+
+
+def _cap_importance(suggested_type: str, importance: int, reason: str) -> tuple[int, str]:
+    value = _clamp_importance(importance)
     return value, reason
+
+
+def _extract_requested_importance(args: dict | None) -> tuple[Any, int] | tuple[None, None]:
+    if not isinstance(args, dict):
+        return None, None
+    for key in ("requested_importance", "raw_importance", "original_importance", "importance"):
+        if key in args and args.get(key) is not None:
+            raw_value = args.get(key)
+            return raw_value, _clamp_importance(raw_value)
+    return None, None
+
+
+def maybe_compress_importance_for_batch(raw_importance: Any) -> int:
+    """Placeholder for future batch/import distribution compression.
+
+    Review Gate must not apply bulk-import anti-inflation rules to explicit
+    single-write candidates. Batch import code can call this future hook before
+    creating pending candidates and should preserve raw_importance separately.
+    """
+    return _clamp_importance(raw_importance)
+
+
+def maybe_compress_batch_importance(raw_importance: Any, context: dict | None = None) -> int:
+    value = _clamp_importance(raw_importance)
+    if value <= 3:
+        return max(2, value)
+    if value <= 6:
+        return min(5, value)
+    if value <= 8:
+        return value - 1
+    if value == 9:
+        return 8
+    return 9 if (context or {}).get("explicit_core") else 8
 
 
 def _metadata_bool(value: Any) -> bool:
@@ -467,6 +595,185 @@ def _format_value(value: Any) -> str:
     return str(value)
 
 
+def preserve_requested_fields(meta: dict, args: dict) -> None:
+    for key in (
+        "domain",
+        "valence",
+        "arousal",
+        "source_bucket",
+        "triggered_by",
+        "raw_importance",
+        "grow_batch_id",
+        "grow_item_index",
+    ):
+        if key in meta or not isinstance(args, dict) or key not in args:
+            continue
+        value = args.get(key)
+        if value in (None, "", -1, "-1", []):
+            continue
+        if key == "domain":
+            meta[key] = normalize_domain(value)
+        elif key in {"valence", "arousal"}:
+            meta[key] = clamp_float01(value, 0.5 if key == "valence" else 0.3)
+        else:
+            meta[key] = value
+
+
+def _type_default_domain(suggested_type: str) -> list[str]:
+    if suggested_type == "feel":
+        return ["feel"]
+    if suggested_type == "I":
+        return ["self"]
+    if suggested_type == "plan":
+        return ["plan"]
+    if suggested_type == "letter":
+        return ["letter"]
+    return ["未分类"]
+
+
+def _type_default_arousal(suggested_type: str) -> float:
+    return 0.4 if suggested_type == "plan" else 0.3
+
+
+def _with_system_tag(tag: str, tags: list[str]) -> list[str]:
+    return normalize_tags([tag] + list(tags or []))
+
+
+def _final_fields_for_approval(
+    meta: dict,
+    body: str,
+    candidate_id: str,
+    src: Path,
+) -> dict:
+    args = meta.get("original_arguments_redacted") or {}
+    if not isinstance(args, dict):
+        args = {}
+    suggested_type = str(meta.get("suggested_type") or "bucket")
+    content = _section(body, "候选内容")
+    preferred_title = str(meta.get("title") or _first_heading(body, candidate_id))
+    title = generate_candidate_title(
+        content or body,
+        preferred_title=preferred_title,
+        original_tool=str(meta.get("original_tool") or ""),
+        original_arguments=args,
+    )
+    if preferred_title and preferred_title != title:
+        meta.setdefault("original_title", preferred_title)
+    display_time = _candidate_display_time(meta, candidate_id, src)
+    display_title = _candidate_display_title(title, display_time)
+
+    raw_tags = pick_meta_arg(meta, args, "tags", [])
+    tags = normalize_tags(raw_tags)
+    domain = normalize_domain(
+        pick_meta_arg(meta, args, "domain", None),
+        default=_type_default_domain(suggested_type),
+    )
+    valence = _pick_float01(meta, args, "valence", 0.5)
+    arousal = _pick_float01(meta, args, "arousal", _type_default_arousal(suggested_type))
+    importance = _clamp_importance(meta.get("suggested_importance") or args.get("importance") or 5)
+    source_bucket = str(pick_meta_arg(meta, args, "source_bucket", "") or "")
+    triggered_by = str(pick_meta_arg(meta, args, "triggered_by", source_bucket) or "")
+    source_tool_default = str(meta.get("original_tool") or "review_approve")
+    source_tool = str(pick_meta_arg(meta, args, "source_tool", source_tool_default) or source_tool_default)
+    grow_batch_id = str(pick_meta_arg(meta, args, "grow_batch_id", "") or "")
+    why_remembered = str(pick_meta_arg(meta, args, "why_remembered", "") or "")
+
+    final_importance = importance
+    final_tags = tags
+    final_domain = domain
+    final_valence = valence
+    final_arousal = arousal
+    extra_update: dict[str, Any] = {}
+
+    if suggested_type == "pinned":
+        if importance != 10:
+            record_adjustment(meta, "importance", importance, 10, "pinned 类型规则固定 importance=10")
+        final_importance = 10
+    elif suggested_type == "feel":
+        final_tags = _with_system_tag("__feel__", tags)
+        if importance > 5:
+            record_adjustment(meta, "importance", importance, 5, "feel 类型规则 importance 最多 5")
+        final_importance = min(importance, 5)
+        final_domain = domain if ("domain" in meta or "domain" in args) else ["feel"]
+    elif suggested_type == "I":
+        final_tags = _with_system_tag("__i__", tags)
+        if importance > 6:
+            record_adjustment(meta, "importance", importance, 6, "I 类型规则 importance 最多 6")
+        final_importance = min(importance, 6)
+        final_domain = domain if ("domain" in meta or "domain" in args) else ["self"]
+        extra_update["dont_surface"] = True
+    elif suggested_type == "plan":
+        final_tags = _with_system_tag("__plan__", tags)
+        if importance != 7:
+            record_adjustment(meta, "importance", importance, 7, "plan 类型规则固定 importance=7")
+        final_importance = 7
+        final_domain = ["plan"]
+        final_arousal = _pick_float01(meta, args, "arousal", 0.4)
+    elif suggested_type == "letter":
+        final_tags = _with_system_tag("__letter__", tags)
+        if importance != 10:
+            record_adjustment(meta, "importance", importance, 10, "letter 类型规则固定 importance=10")
+        final_importance = 10
+        final_domain = ["letter"]
+
+    return {
+        "suggested_type": suggested_type,
+        "content": content,
+        "title": title,
+        "display_title": display_title,
+        "tags": final_tags,
+        "importance": final_importance,
+        "domain": final_domain,
+        "valence": final_valence,
+        "arousal": final_arousal,
+        "source_bucket": source_bucket,
+        "triggered_by": triggered_by,
+        "source_tool": source_tool,
+        "grow_batch_id": grow_batch_id,
+        "why_remembered": why_remembered,
+        "extra_update": extra_update,
+        "args": args,
+        "planned_updates": meta.get("planned_updates") or {},
+    }
+
+
+def _format_approval_plan(candidate_id: str, fields: dict, dry_run: bool, confirmed: bool) -> str:
+    lines = [
+        f"候选：{candidate_id}",
+        f"类型：{fields['suggested_type']}",
+        f"标题：{fields['display_title']}",
+        f"dry_run：{dry_run}",
+        f"confirmed：{confirmed}",
+        f"将执行：按 {fields['suggested_type']} 语义写入或更新正式 buckets。",
+        "最终字段：",
+        f"- importance: {fields['importance']}",
+        f"- tags: {json.dumps(fields['tags'], ensure_ascii=False)}",
+        f"- domain: {json.dumps(fields['domain'], ensure_ascii=False)}",
+        f"- valence: {fields['valence']}",
+        f"- arousal: {fields['arousal']}",
+    ]
+    if fields.get("source_bucket"):
+        lines.append(f"- source_bucket: {fields['source_bucket']}")
+    if fields.get("triggered_by"):
+        lines.append(f"- triggered_by: {fields['triggered_by']}")
+    if fields.get("grow_batch_id"):
+        lines.append(f"- grow_batch_id: {fields['grow_batch_id']}")
+    args = fields.get("args") or {}
+    if fields["suggested_type"] == "plan":
+        lines.append(f"- status: {args.get('status', 'active')}")
+        lines.append(f"- weight: {args.get('weight', 0.5)}")
+        if args.get("related_bucket"):
+            lines.append(f"- related_bucket: {args.get('related_bucket')}")
+    if fields["suggested_type"] == "letter":
+        for key in ("author", "title", "date", "user_name"):
+            if args.get(key):
+                lines.append(f"- {key}: {args.get(key)}")
+    planned_updates = fields.get("planned_updates") or {}
+    if planned_updates:
+        lines.append("- planned_updates: " + json.dumps(planned_updates, ensure_ascii=False, sort_keys=True))
+    return "\n".join(lines)
+
+
 async def create_pending_candidate(
     *,
     original_tool: str,
@@ -484,10 +791,22 @@ async def create_pending_candidate(
     target_bucket_id: str = "",
     planned_updates: dict | None = None,
 ) -> dict:
-    tags = tags or []
+    tags = normalize_tags(tags or [])
     original_arguments = original_arguments or {}
     planned_updates = planned_updates or {}
+    requested_raw, requested_clamped = _extract_requested_importance(original_arguments)
+    suggested_raw = suggested_importance
+    suggested_clamped = _clamp_importance(suggested_importance)
     suggested_importance, reason = _cap_importance(suggested_type, suggested_importance, reason)
+    importance_adjust_reasons = []
+    if suggested_importance != suggested_clamped:
+        importance_adjust_reasons.append(
+            f"suggested_importance 已从 {suggested_raw} 调整为 {suggested_importance}。"
+        )
+    if requested_clamped is not None and suggested_importance != requested_clamped:
+        importance_adjust_reasons.append(
+            f"requested_importance={requested_clamped}，实际 suggested_importance={suggested_importance}。"
+        )
 
     redacted_content, hit_content = _redact_text(content)
     redacted_quote, hit_quote = _redact_text(source_quote)
@@ -561,10 +880,24 @@ async def create_pending_candidate(
             "notes": notes or "",
             "created_at": created_at,
         }
+        preserve_requested_fields(metadata, redacted_args if isinstance(redacted_args, dict) else {})
         if target_bucket_id:
             metadata["target_bucket_id"] = target_bucket_id
         if redacted_updates:
             metadata["planned_updates"] = redacted_updates
+        if requested_raw is not None:
+            metadata["original_importance"] = requested_raw
+            metadata["requested_importance"] = requested_clamped
+        elif suggested_raw != suggested_importance:
+            metadata["original_importance"] = suggested_raw
+            metadata["requested_importance"] = suggested_clamped
+        if importance_adjust_reasons:
+            upstream_reason = ""
+            if isinstance(redacted_args, dict):
+                upstream_reason = str(redacted_args.get("importance_adjust_reason") or "")
+            metadata["importance_adjust_reason"] = " ".join(
+                [r for r in [upstream_reason, *importance_adjust_reasons] if r]
+            )
         path = _candidate_path(candidate_id, "pending")
         try:
             with path.open("x", encoding="utf-8") as fh:
@@ -632,12 +965,91 @@ async def update_pending_memory(
             updates = parsed
         except json.JSONDecodeError as e:
             return f"updates_json 解析失败：{e}"
+    update_notes = []
     for key, value in updates.items():
+        if key == "suggested_importance":
+            try:
+                parsed_value = _parse_importance(value)
+            except ValueError as e:
+                return str(e)
+            clamped_value = max(1, min(10, parsed_value))
+            meta[key] = clamped_value
+            meta["review_requested_importance"] = parsed_value
+            if clamped_value != parsed_value:
+                note = (
+                    f"suggested_importance 已按合法范围从 {parsed_value} clamp 到 {clamped_value}。"
+                )
+                meta["importance_adjust_reason"] = note
+                update_notes.append(note)
+            else:
+                update_notes.append(f"suggested_importance 已更新为 {clamped_value}。")
+            continue
+        if key == "tags":
+            meta[key] = normalize_tags(value)
+            update_notes.append("tags 已 normalize 并去重。")
+            continue
+        if key == "domain":
+            meta[key] = normalize_domain(value)
+            update_notes.append("domain 已 normalize 并去重。")
+            continue
+        if key in {"valence", "arousal"}:
+            default = 0.5 if key == "valence" else 0.3
+            final = clamp_float01(value, default)
+            meta[key] = final
+            if final != value:
+                record_adjustment(meta, key, value, final, "update_pending_memory 数值合法范围 clamp")
+                update_notes.append(f"{key} 已按合法范围调整为 {final}。")
+            else:
+                update_notes.append(f"{key} 已更新为 {final}。")
+            continue
+        if key == "planned_updates":
+            if not isinstance(value, dict):
+                return "planned_updates 必须是 JSON object。"
+            clean_updates = dict(value)
+            if "tags" in clean_updates:
+                clean_updates["tags"] = normalize_tags(clean_updates["tags"])
+            if "domain" in clean_updates:
+                clean_updates["domain"] = normalize_domain(clean_updates["domain"])
+            if "importance" in clean_updates:
+                clean_updates["importance"] = _clamp_importance(clean_updates["importance"])
+            if "valence" in clean_updates:
+                clean_updates["valence"] = clamp_float01(clean_updates["valence"], 0.5)
+            if "arousal" in clean_updates:
+                clean_updates["arousal"] = clamp_float01(clean_updates["arousal"], 0.3)
+            meta[key] = clean_updates
+            update_notes.append("planned_updates 已保存。")
+            continue
+        if key in {
+            "title",
+            "source_bucket",
+            "triggered_by",
+            "source_file",
+            "source_location",
+            "source_quote",
+            "target_bucket_id",
+            "reason",
+            "notes",
+            "status",
+            "weight",
+            "related_bucket",
+            "author",
+            "date",
+            "user_name",
+            "grow_batch_id",
+            "grow_item_index",
+            "raw_importance",
+            "requested_importance",
+            "original_importance",
+        }:
+            meta[key] = value
+            update_notes.append(f"{key} 已更新。")
+            continue
         meta[key] = value
     if body:
         content = body
     path.write_text(_dump_candidate(meta, content), encoding="utf-8")
-    return f"已更新 pending 候选：{candidate_id}"
+    suffix = ("\n" + "\n".join(update_notes)) if update_notes else ""
+    return f"已更新 pending 候选：{candidate_id}{suffix}"
 
 
 async def reject_pending_memory(candidate_id: str, reason: str = "") -> str:
@@ -699,28 +1111,30 @@ async def approve_pending_memory(candidate_id: str, dry_run: bool = True, confir
         meta["confirmed_at"] = datetime.now().isoformat(timespec="seconds")
         meta["confirmed_via"] = "review_approve_confirmed"
         src.write_text(_dump_candidate(meta, body), encoding="utf-8")
-    suggested_type = str(meta.get("suggested_type") or "bucket")
-    content = _section(body, "候选内容")
-    title = generate_candidate_title(
-        content or body,
-        preferred_title=str(meta.get("title") or _first_heading(body, candidate_id)),
-        original_tool=str(meta.get("original_tool") or ""),
-        original_arguments=meta.get("original_arguments_redacted") or {},
-    )
-    display_time = _candidate_display_time(meta, candidate_id, src)
-    display_title = _candidate_display_title(title, display_time)
+    fields = _final_fields_for_approval(meta, body, candidate_id, src)
+    suggested_type = fields["suggested_type"]
+    content = fields["content"]
+    title = fields["title"]
+    display_title = fields["display_title"]
     meta["title"] = title
-    tags = meta.get("tags") or []
-    importance = int(meta.get("suggested_importance") or 5)
+    meta["display_title"] = display_title
+    meta["final_fields"] = {
+        k: fields[k]
+        for k in (
+            "importance",
+            "tags",
+            "domain",
+            "valence",
+            "arousal",
+            "source_bucket",
+            "triggered_by",
+            "source_tool",
+            "grow_batch_id",
+        )
+        if fields.get(k) not in (None, "", [])
+    }
     blockers = _approval_blockers(meta)
-    plan = (
-        f"候选：{candidate_id}\n"
-        f"类型：{suggested_type}\n"
-        f"标题：{display_title}\n"
-        f"dry_run：{dry_run}\n"
-        f"confirmed：{confirmed}\n"
-        f"将执行：按 {suggested_type} 语义写入或更新正式 buckets。"
-    )
+    plan = _format_approval_plan(candidate_id, fields, dry_run, confirmed)
     if blockers:
         plan += "\n阻止正式批准：\n" + "\n".join(f"- {b}" for b in blockers)
     if dry_run:
@@ -730,96 +1144,110 @@ async def approve_pending_memory(candidate_id: str, dry_run: bool = True, confir
     body = _replace_first_heading(body, title)
 
     bucket_id = ""
-    args = meta.get("original_arguments_redacted") or {}
-    planned_updates = meta.get("planned_updates") or {}
+    args = fields["args"]
+    planned_updates = fields["planned_updates"]
     if suggested_type == "bucket":
         bucket_id = await rt.bucket_mgr.create(
             content=content,
-            tags=tags,
-            importance=importance,
-            domain=["未分类"],
-            valence=0.5,
-            arousal=0.3,
+            tags=fields["tags"],
+            importance=fields["importance"],
+            domain=fields["domain"],
+            valence=fields["valence"],
+            arousal=fields["arousal"],
             name=display_title,
-            source_tool="review_approve",
+            why_remembered=fields["why_remembered"],
+            source_tool=fields["source_tool"],
+            grow_batch_id=fields["grow_batch_id"],
         )
     elif suggested_type == "pinned":
         bucket_id = await rt.bucket_mgr.create(
             content=content,
-            tags=tags,
-            importance=10,
-            domain=["未分类"],
-            valence=0.5,
-            arousal=0.3,
+            tags=fields["tags"],
+            importance=fields["importance"],
+            domain=fields["domain"],
+            valence=fields["valence"],
+            arousal=fields["arousal"],
             name=display_title,
             bucket_type="permanent",
             pinned=True,
-            source_tool="review_approve",
+            why_remembered=fields["why_remembered"],
+            source_tool=fields["source_tool"],
         )
     elif suggested_type == "feel":
         bucket_id = await rt.bucket_mgr.create(
             content=content,
-            tags=list(dict.fromkeys(["__feel__"] + list(tags))),
-            importance=min(importance, 5),
-            domain=["feel"],
-            valence=0.5,
-            arousal=0.3,
+            tags=fields["tags"],
+            importance=fields["importance"],
+            domain=fields["domain"],
+            valence=fields["valence"],
+            arousal=fields["arousal"],
             name=display_title,
             bucket_type="feel",
-            triggered_by=str(args.get("source_bucket") or ""),
-            source_tool="review_approve",
+            triggered_by=fields["triggered_by"],
+            why_remembered=fields["why_remembered"],
+            source_tool=fields["source_tool"],
         )
     elif suggested_type == "I":
         bucket_id = await rt.bucket_mgr.create(
             content=content,
-            tags=list(dict.fromkeys(["__i__"] + list(tags))),
-            importance=min(importance, 6),
-            domain=["self"],
-            valence=0.5,
-            arousal=0.3,
+            tags=fields["tags"],
+            importance=fields["importance"],
+            domain=fields["domain"],
+            valence=fields["valence"],
+            arousal=fields["arousal"],
             name=display_title,
             bucket_type="i",
             weight=0.8,
-            source_tool="review_approve",
+            why_remembered=fields["why_remembered"],
+            source_tool=fields["source_tool"],
         )
         await rt.bucket_mgr.update(bucket_id, dont_surface=True)
     elif suggested_type == "plan":
+        weight = clamp_float01(pick_meta_arg(meta, args, "weight", 0.5), 0.5)
         bucket_id = await rt.bucket_mgr.create(
             content=content,
-            tags=["__plan__"],
-            importance=7,
-            domain=["plan"],
-            valence=0.5,
-            arousal=0.4,
+            tags=fields["tags"],
+            importance=fields["importance"],
+            domain=fields["domain"],
+            valence=fields["valence"],
+            arousal=fields["arousal"],
             name=display_title,
             bucket_type="plan",
-            weight=float(args.get("weight") or 0.5),
-            source_tool="review_approve",
+            weight=weight,
+            why_remembered=fields["why_remembered"],
+            source_tool=fields["source_tool"],
         )
+        try:
+            from ._common import append_plan_change_log
+            initial_log = append_plan_change_log([], "created", to=str(pick_meta_arg(meta, args, "status", "active") or "active"))
+        except Exception:
+            initial_log = []
         await rt.bucket_mgr.update(
             bucket_id,
-            status=str(args.get("status") or "active"),
-            related_bucket=str(args.get("related_bucket") or ""),
+            status=str(pick_meta_arg(meta, args, "status", "active") or "active"),
+            related_bucket=str(pick_meta_arg(meta, args, "related_bucket", "") or ""),
+            change_log=initial_log,
         )
     elif suggested_type == "letter":
-        author = str(args.get("author") or "unknown")
+        author = str(pick_meta_arg(meta, args, "author", "unknown") or "unknown")
         bucket_id = await rt.bucket_mgr.create(
             content=content,
-            tags=["__letter__"],
-            importance=10,
-            domain=["letter"],
-            valence=0.5,
-            arousal=0.3,
+            tags=fields["tags"],
+            importance=fields["importance"],
+            domain=fields["domain"],
+            valence=fields["valence"],
+            arousal=fields["arousal"],
             name=display_title,
             bucket_type="letter",
-            source_tool="review_approve",
+            why_remembered=fields["why_remembered"],
+            source_tool=fields["source_tool"],
         )
         await rt.bucket_mgr.update(
             bucket_id,
             author=author,
-            user_name=str(args.get("user_name") or ""),
-            title=str(args.get("title") or title),
-            letter_date=str(args.get("date") or ""),
+            user_name=str(pick_meta_arg(meta, args, "user_name", "") or ""),
+            title=str(pick_meta_arg(meta, args, "title", title) or title),
+            letter_date=str(pick_meta_arg(meta, args, "date", "") or ""),
         )
     elif suggested_type == "anchor":
         target_id = str(meta.get("target_bucket_id") or args.get("bucket_id") or "")
@@ -851,7 +1279,13 @@ async def approve_pending_memory(candidate_id: str, dry_run: bool = True, confir
 
     meta["status"] = "approved"
     meta["approved_at"] = datetime.now().isoformat(timespec="seconds")
-    meta["approved_result"] = {"bucket_id": bucket_id, "suggested_type": suggested_type, "display_title": display_title}
+    meta["approved_result"] = {
+        "bucket_id": bucket_id,
+        "suggested_type": suggested_type,
+        "display_title": display_title,
+        "final_fields": meta.get("final_fields", {}),
+        "field_adjustments": meta.get("field_adjustments", []),
+    }
     meta["formal_result"] = meta["approved_result"]
     src.write_text(_dump_candidate(meta, body), encoding="utf-8")
     dst = _candidate_path(candidate_id, "approved")

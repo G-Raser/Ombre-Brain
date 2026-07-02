@@ -30,6 +30,7 @@ from . import embedding
 from . import ollama_local
 from . import config_api
 from . import review
+from . import ui_settings
 
 
 def register_all(mcp) -> None:
@@ -51,3 +52,4 @@ def register_all(mcp) -> None:
     ollama_local.register(mcp)
     config_api.register(mcp)
     review.register(mcp)
+    ui_settings.register(mcp)

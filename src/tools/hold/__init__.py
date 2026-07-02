@@ -41,6 +41,7 @@ async def dispatch(
     valence: Optional[float] = -1,
     arousal: Optional[float] = -1,
     why_remembered: Optional[str] = "",
+    domain: Optional[str] = "",
 ) -> str:
     if tags is None: tags = ""
     if importance is None: importance = 5
@@ -50,6 +51,7 @@ async def dispatch(
     if valence is None: valence = -1
     if arousal is None: arousal = -1
     if why_remembered is None: why_remembered = ""
+    if domain is None: domain = ""
     why_remembered = str(why_remembered).strip()[:500]
     if rt.mark_op:
         rt.mark_op("hold")
@@ -64,7 +66,14 @@ async def dispatch(
 
     # importance 越界 clamp 由 bucket_manager 接管（OB-W001 自动 push 到 channel）；
     # 这里仅做一次软 clamp 便于配额判断。
-    importance = max(1, min(10, importance))
+    requested_importance = importance
+    try:
+        requested_importance = int(requested_importance)
+    except (TypeError, ValueError):
+        requested_importance = 5
+    importance = max(1, min(10, requested_importance))
+    requested_importance = importance
+    importance_adjust_reason = ""
 
     # pinned 配额检查（OB-W004 软警告 / OB-I002 自动退出）
     if pinned and not feel:
@@ -72,7 +81,13 @@ async def dispatch(
 
     # importance≥9 配额检查（OB-W003 软警告 / OB-I001 自动降级）
     if not pinned and not feel:
+        before_quota_importance = importance
         importance = await enforce_high_importance_quota(importance)
+        if importance != before_quota_importance:
+            importance_adjust_reason = (
+                f"importance>=9 高权重配额达到硬上限，"
+                f"requested_importance={before_quota_importance} 已调整为 {importance}。"
+            )
 
     # valence/arousal 越界回退到自动打标（OB-W002 由 bucket_manager 在 clamp 时 push；
     # 这里的 -1 咨兵语义是"她/他未传"，越界则忽略，让 LLM analyze 决定）
@@ -101,6 +116,10 @@ async def dispatch(
         extra_tags = [str(t).strip() for t in tags if t]
     else:
         extra_tags = [t.strip() for t in str(tags).split(",") if t.strip()]
+    if isinstance(domain, list):
+        explicit_domain = [str(d).strip() for d in domain if str(d).strip()]
+    else:
+        explicit_domain = [d.strip() for d in str(domain).split(",") if d.strip()]
 
     if review_mode_enabled("intercept_hold"):
         if feel and review_mode_enabled("intercept_feel"):
@@ -118,6 +137,22 @@ async def dispatch(
             original_tool = "hold"
             suggested_importance = importance
             title = ""
+        original_args = {
+            "content_len": len(content or ""),
+            "tags": extra_tags,
+            "importance": importance,
+            "requested_importance": requested_importance,
+            "pinned": pinned,
+            "feel": feel,
+            "source_bucket": source_bucket,
+            "valence": valence,
+            "arousal": arousal,
+            "domain": explicit_domain,
+            "why_remembered": why_remembered,
+            "why_len": len(why_remembered or ""),
+        }
+        if importance_adjust_reason:
+            original_args["importance_adjust_reason"] = importance_adjust_reason
         candidate = await create_pending_candidate(
             original_tool=original_tool,
             suggested_type=suggested_type,
@@ -125,17 +160,7 @@ async def dispatch(
             content=content.strip(),
             suggested_importance=suggested_importance,
             tags=extra_tags,
-            original_arguments={
-                "content_len": len(content or ""),
-                "tags": extra_tags,
-                "importance": importance,
-                "pinned": pinned,
-                "feel": feel,
-                "source_bucket": source_bucket,
-                "valence": valence,
-                "arousal": arousal,
-                "why_len": len(why_remembered or ""),
-            },
+            original_arguments=original_args,
             reason="review mode 已开启，hold 写入默认进入 pending，主人确认后才可进入正式 buckets。",
             notes="I / feel / pinned 不允许自动批准。" if suggested_type in {"feel", "pinned"} else "",
         )
@@ -174,5 +199,6 @@ async def dispatch(
         valence=valence,
         arousal=arousal,
         why_remembered=why_remembered,
+        explicit_domain=explicit_domain or None,
     )
     return result

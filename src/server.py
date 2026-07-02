@@ -591,6 +591,7 @@ async def hold(
     valence: Optional[float] = -1,
     arousal: Optional[float] = -1,
     why_remembered: Optional[str] = "",
+    domain: Optional[str] = "",
 ) -> str:
     """存入一条记忆(一句话级)。系统自动打标并尝试与近似的已有桶合并。tags 逗号分隔,importance 1-10。pinned=True=标记为永久核心,不衰减不合并。feel=True=存为感受类记忆(不参与普通浮现,仅通过 breath(domain=\"feel\") 读取)。source_bucket=正在消化的原始记忆桶 ID,会被标为已消化以加速淡化。why_remembered=记录原因(可选,自由文本,仅用于展示不计分)。"""
     return await _with_notice(
@@ -598,12 +599,14 @@ async def hold(
             content=content, tags=tags, importance=importance,
             pinned=pinned, feel=feel, source_bucket=source_bucket,
             valence=valence, arousal=arousal, why_remembered=why_remembered,
+            domain=domain,
         ),
         op="hold",
         args={
             "content_len": len(content or ""), "tags": tags,
             "importance": importance, "pinned": pinned, "feel": feel,
             "source_bucket": source_bucket, "valence": valence, "arousal": arousal,
+            "domain": domain,
             "why_len": len(why_remembered or ""),
         },
     )

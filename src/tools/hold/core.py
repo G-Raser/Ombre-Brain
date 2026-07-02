@@ -37,6 +37,7 @@ async def store_core(
     valence: float,
     arousal: float,
     why_remembered: str,
+    explicit_domain: list | None = None,
 ) -> str:
     try:
         analysis = await rt.dehydrator.analyze(content)
@@ -45,7 +46,7 @@ async def store_core(
             f"API key 未配置或调用失败，打标无法完成，桶未创建。请检查 OMBRE_COMPRESS_API_KEY。（错误：{e}）"
         ) from e
 
-    domain = analysis.get("domain") or ["未分类"]
+    domain = explicit_domain or analysis.get("domain") or ["未分类"]
     if not isinstance(domain, list):
         domain = ["未分类"]
     _v = analysis.get("valence", 0.5)

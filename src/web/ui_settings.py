@@ -18,23 +18,29 @@ from . import _shared as sh
 ALLOWED_THEMES = {"ombre-original", "umi-purple", "cattea-gold-black", "cc-gold-brown"}
 ALLOWED_BACKGROUND_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 MAX_BACKGROUND_BYTES = 10 * 1024 * 1024
-ALLOWED_FIELDS = {
+ALLOWED_TOP_FIELDS = {
     "theme",
+    "show_mascot",
+    "themes",
+}
+ALLOWED_THEME_FIELDS = {
     "background_enabled",
     "background_url",
     "background_dim",
     "background_blur",
     "background_position",
-    "show_mascot",
 }
-DEFAULT_UI_SETTINGS: dict[str, Any] = {
-    "theme": "umi-purple",
+DEFAULT_THEME_SETTINGS: dict[str, Any] = {
     "background_enabled": False,
     "background_url": None,
     "background_dim": 0.72,
     "background_blur": 0,
     "background_position": "center center",
+}
+DEFAULT_UI_SETTINGS: dict[str, Any] = {
+    "theme": "umi-purple",
     "show_mascot": False,
+    "themes": {},
 }
 
 
@@ -62,13 +68,15 @@ def _clamp_float(value: Any, default: float, low: float, high: float) -> float:
     return max(low, min(high, n))
 
 
-def _normalize_settings(raw: Any) -> dict[str, Any]:
-    data = dict(DEFAULT_UI_SETTINGS)
-    if isinstance(raw, dict):
-        data.update({k: raw.get(k) for k in ALLOWED_FIELDS if k in raw})
+def _default_themes() -> dict[str, dict[str, Any]]:
+    return {theme: dict(DEFAULT_THEME_SETTINGS) for theme in sorted(ALLOWED_THEMES)}
 
-    if data.get("theme") not in ALLOWED_THEMES:
-        data["theme"] = DEFAULT_UI_SETTINGS["theme"]
+
+def _normalize_theme_settings(raw: Any) -> dict[str, Any]:
+    data = dict(DEFAULT_THEME_SETTINGS)
+    if isinstance(raw, dict):
+        data.update({k: raw.get(k) for k in ALLOWED_THEME_FIELDS if k in raw})
+
     data["background_enabled"] = bool(data.get("background_enabled"))
     bg_url = data.get("background_url")
     data["background_url"] = bg_url if isinstance(bg_url, str) and bg_url.startswith("/user-assets/backgrounds/") else None
@@ -77,9 +85,52 @@ def _normalize_settings(raw: Any) -> dict[str, Any]:
     data["background_dim"] = _clamp_float(data.get("background_dim"), 0.72, 0.45, 0.90)
     data["background_blur"] = _clamp_float(data.get("background_blur"), 0, 0, 8)
     if data.get("background_position") not in {"center center", "top center", "bottom center"}:
-        data["background_position"] = DEFAULT_UI_SETTINGS["background_position"]
-    data["show_mascot"] = bool(data.get("show_mascot"))
+        data["background_position"] = DEFAULT_THEME_SETTINGS["background_position"]
     return data
+
+
+def _normalize_settings(raw: Any) -> dict[str, Any]:
+    data = {
+        "theme": DEFAULT_UI_SETTINGS["theme"],
+        "show_mascot": DEFAULT_UI_SETTINGS["show_mascot"],
+        "themes": _default_themes(),
+    }
+    if isinstance(raw, dict):
+        data.update({k: raw.get(k) for k in ALLOWED_TOP_FIELDS if k in raw})
+
+    if data.get("theme") not in ALLOWED_THEMES:
+        data["theme"] = DEFAULT_UI_SETTINGS["theme"]
+    data["show_mascot"] = bool(data.get("show_mascot"))
+
+    themes = _default_themes()
+    raw_themes = data.get("themes")
+    if isinstance(raw_themes, dict):
+        for theme in sorted(ALLOWED_THEMES):
+            themes[theme] = _normalize_theme_settings(raw_themes.get(theme))
+
+    # Backward-compatible migration for older ui.json files with global
+    # background fields. Move those fields into the currently selected theme.
+    if isinstance(raw, dict) and any(k in raw for k in ALLOWED_THEME_FIELDS):
+        active_theme = data["theme"]
+        legacy = {k: raw.get(k) for k in ALLOWED_THEME_FIELDS if k in raw}
+        themes[active_theme] = _normalize_theme_settings({**themes[active_theme], **legacy})
+
+    data["themes"] = themes
+    return data
+
+
+def _active_theme(settings: dict[str, Any]) -> str:
+    theme = settings.get("theme")
+    return theme if theme in ALLOWED_THEMES else DEFAULT_UI_SETTINGS["theme"]
+
+
+def _update_theme_settings(settings: dict[str, Any], theme: str, patch: dict[str, Any]) -> dict[str, Any]:
+    target = theme if theme in ALLOWED_THEMES else _active_theme(settings)
+    themes = dict(settings.get("themes") or _default_themes())
+    current = themes.get(target, dict(DEFAULT_THEME_SETTINGS))
+    themes[target] = _normalize_theme_settings({**current, **patch})
+    settings["themes"] = themes
+    return settings
 
 
 def _write_settings(settings: dict[str, Any]) -> None:
@@ -94,7 +145,7 @@ def _write_settings(settings: dict[str, Any]) -> None:
 def _read_settings() -> tuple[dict[str, Any], bool]:
     path = _settings_path()
     if not path.exists():
-        data = dict(DEFAULT_UI_SETTINGS)
+        data = _normalize_settings(DEFAULT_UI_SETTINGS)
         _write_settings(data)
         return data, False
     try:
@@ -104,7 +155,7 @@ def _read_settings() -> tuple[dict[str, Any], bool]:
         return data, False
     except Exception as exc:
         sh.logger.warning(f"[ui-settings] failed to read ui.json, using defaults: {exc}")
-        data = dict(DEFAULT_UI_SETTINGS)
+        data = _normalize_settings(DEFAULT_UI_SETTINGS)
         try:
             _write_settings(data)
         except Exception as write_exc:
@@ -157,8 +208,26 @@ def register(mcp) -> None:
             return JSONResponse({"ok": False, "error": "body must be a JSON object"}, status_code=400)
 
         current, _ = _read_settings()
-        update = {k: body[k] for k in ALLOWED_FIELDS if k in body}
-        next_settings = _normalize_settings({**current, **update})
+        next_settings = _normalize_settings(current)
+
+        if "theme" in body:
+            next_settings["theme"] = body["theme"] if body["theme"] in ALLOWED_THEMES else next_settings["theme"]
+        if "show_mascot" in body:
+            next_settings["show_mascot"] = bool(body.get("show_mascot"))
+
+        theme_patch = {k: body[k] for k in ALLOWED_THEME_FIELDS if k in body}
+        if theme_patch:
+            target_theme = body.get("target_theme") or body.get("theme") or _active_theme(next_settings)
+            _update_theme_settings(next_settings, target_theme, theme_patch)
+
+        if isinstance(body.get("themes"), dict):
+            themes = dict(next_settings.get("themes") or _default_themes())
+            for theme, patch in body["themes"].items():
+                if theme in ALLOWED_THEMES:
+                    themes[theme] = _normalize_theme_settings({**themes.get(theme, {}), **(patch if isinstance(patch, dict) else {})})
+            next_settings["themes"] = themes
+
+        next_settings = _normalize_settings(next_settings)
         _write_settings(next_settings)
         return JSONResponse({"ok": True, "settings": next_settings})
 
@@ -179,6 +248,9 @@ def register(mcp) -> None:
             upload = form.get("file")
             if not upload or isinstance(upload, str):
                 return JSONResponse({"ok": False, "error": "missing file field"}, status_code=400)
+            target_theme = form.get("theme")
+            if not isinstance(target_theme, str) or target_theme not in ALLOWED_THEMES:
+                target_theme = None
             original = getattr(upload, "filename", "background")
             ext = Path(original or "").suffix.lower()
             if ext not in ALLOWED_BACKGROUND_EXTS:
@@ -199,11 +271,15 @@ def register(mcp) -> None:
         url = f"/user-assets/backgrounds/{filename}"
 
         current, _ = _read_settings()
-        next_settings = _normalize_settings({
-            **current,
-            "background_url": url,
-            "background_enabled": True,
-        })
+        next_settings = _normalize_settings(current)
+        _update_theme_settings(
+            next_settings,
+            target_theme or _active_theme(next_settings),
+            {
+                "background_url": url,
+                "background_enabled": True,
+            },
+        )
         _write_settings(next_settings)
         return JSONResponse({"ok": True, "url": url, "filename": filename, "settings": next_settings})
 
