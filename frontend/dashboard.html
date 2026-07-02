@@ -205,7 +205,26 @@
     })() || {theme: DEFAULT_THEME});
     window.applyDashboardUiSettings(window.OMBRE_UI_SETTINGS);
     window.loadDashboardUiSettings();
+    window.setStableMobileBgHeight = function() {
+      var h = Math.max(window.innerHeight || 0, document.documentElement.clientHeight || 0);
+      if (!h) return;
+      document.documentElement.style.setProperty('--stable-bg-height', Math.ceil(h * 1.35) + 'px');
+    };
+    var stableMobileBgResizeTimer = null;
+    function scheduleStableMobileBgHeight(delay) {
+      window.clearTimeout(stableMobileBgResizeTimer);
+      stableMobileBgResizeTimer = window.setTimeout(window.setStableMobileBgHeight, delay || 120);
+    }
+    window.setStableMobileBgHeight();
+    window.addEventListener('load', window.setStableMobileBgHeight);
+    window.addEventListener('orientationchange', function() {
+      scheduleStableMobileBgHeight(320);
+    });
+    window.addEventListener('resize', function() {
+      scheduleStableMobileBgHeight(180);
+    });
     document.addEventListener('DOMContentLoaded', function() {
+      window.setStableMobileBgHeight();
       window.applyDashboardUiSettings(window.OMBRE_UI_SETTINGS);
     });
   })();
@@ -487,26 +506,51 @@
   html[data-bg-enabled="true"] body::after {
     opacity: 1;
   }
+
+  #dashboard-bg-layer,
+  #dashboard-bg-dim-layer {
+    display: none;
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: var(--stable-bg-height, 120vh);
+    pointer-events: none;
+    opacity: 0;
+  }
+  #dashboard-bg-layer {
+    z-index: -2;
+    background-image: var(--custom-bg-image);
+    background-size: cover;
+    background-position: var(--custom-bg-position, center center);
+    background-repeat: no-repeat;
+    background-attachment: scroll;
+  }
+  #dashboard-bg-dim-layer {
+    z-index: -1;
+    background:
+      linear-gradient(180deg, rgba(7, 6, 13, var(--bg-dim-opacity, 0.45)), rgba(5, 5, 10, var(--bg-dim-opacity, 0.45))),
+      radial-gradient(circle at 70% 10%, rgba(82, 58, 148, calc(var(--bg-dim-opacity, 0.45) * 0.32)), transparent 44%);
+  }
   @media (max-width: 768px), (hover: none), (pointer: coarse) {
     body {
       min-height: 100vh;
     }
     body::before,
     body::after {
-      position: fixed;
-      top: -16vh;
-      right: 0;
-      bottom: -16vh;
-      left: 0;
-      width: 100%;
-      height: auto;
-      min-height: 0;
-      pointer-events: none;
+      display: none !important;
     }
-    body::before {
-      background-attachment: scroll !important;
+    #dashboard-bg-layer,
+    #dashboard-bg-dim-layer {
+      display: block;
+    }
+    #dashboard-bg-layer {
       filter: none !important;
       transform: none !important;
+    }
+    html[data-bg-enabled="true"] #dashboard-bg-layer,
+    html[data-bg-enabled="true"] #dashboard-bg-dim-layer {
+      opacity: 1;
     }
     #auth-overlay {
       min-height: 100svh;
@@ -3544,6 +3588,8 @@
 </style>
 </head>
 <body>
+<div id="dashboard-bg-layer" aria-hidden="true"></div>
+<div id="dashboard-bg-dim-layer" aria-hidden="true"></div>
 
 <!-- SVG icon sprite — all icons referenced via <use href="#i-*"> -->
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
