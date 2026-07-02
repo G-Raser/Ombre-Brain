@@ -205,10 +205,17 @@
     })() || {theme: DEFAULT_THEME});
     window.applyDashboardUiSettings(window.OMBRE_UI_SETTINGS);
     window.loadDashboardUiSettings();
-    window.setStableMobileBgHeight = function() {
-      var h = Math.max(window.innerHeight || 0, document.documentElement.clientHeight || 0);
-      if (!h) return;
-      document.documentElement.style.setProperty('--stable-bg-height', Math.ceil(h * 1.35) + 'px');
+    window.setStableMobileBgHeight = function(force) {
+      var root = document.documentElement;
+      var isMobile = window.matchMedia && window.matchMedia('(max-width: 768px), (hover: none), (pointer: coarse)').matches;
+      if (!isMobile) {
+        root.style.removeProperty('--stable-bg-height');
+        return;
+      }
+      var screenHeight = (window.screen && window.screen.height) ? window.screen.height : 0;
+      var h = Math.max(window.innerHeight || 0, root.clientHeight || 0, screenHeight || 0);
+      if (!h) h = 800;
+      root.style.setProperty('--stable-bg-height', Math.ceil(h * 1.35) + 'px');
     };
     var stableMobileBgResizeTimer = null;
     function scheduleStableMobileBgHeight(delay) {
@@ -219,9 +226,6 @@
     window.addEventListener('load', window.setStableMobileBgHeight);
     window.addEventListener('orientationchange', function() {
       scheduleStableMobileBgHeight(320);
-    });
-    window.addEventListener('resize', function() {
-      scheduleStableMobileBgHeight(180);
     });
     document.addEventListener('DOMContentLoaded', function() {
       window.setStableMobileBgHeight();
@@ -514,7 +518,7 @@
     left: 0;
     right: 0;
     top: 0;
-    height: var(--stable-bg-height, 120vh);
+    height: var(--stable-bg-height, 980px);
     pointer-events: none;
     opacity: 0;
   }
