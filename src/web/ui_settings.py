@@ -29,13 +29,17 @@ ALLOWED_THEME_FIELDS = {
     "background_dim",
     "background_blur",
     "background_position",
+    "card_opacity",
+    "panel_opacity",
 }
 DEFAULT_THEME_SETTINGS: dict[str, Any] = {
     "background_enabled": False,
     "background_url": None,
-    "background_dim": 0.72,
+    "background_dim": 0.45,
     "background_blur": 0,
     "background_position": "center center",
+    "card_opacity": 0.86,
+    "panel_opacity": 0.82,
 }
 DEFAULT_UI_SETTINGS: dict[str, Any] = {
     "theme": "umi-purple",
@@ -82,8 +86,10 @@ def _normalize_theme_settings(raw: Any) -> dict[str, Any]:
     data["background_url"] = bg_url if isinstance(bg_url, str) and bg_url.startswith("/user-assets/backgrounds/") else None
     if not data["background_url"]:
         data["background_enabled"] = False
-    data["background_dim"] = _clamp_float(data.get("background_dim"), 0.72, 0.45, 0.90)
+    data["background_dim"] = _clamp_float(data.get("background_dim"), 0.45, 0, 1)
     data["background_blur"] = _clamp_float(data.get("background_blur"), 0, 0, 8)
+    data["card_opacity"] = _clamp_float(data.get("card_opacity"), 0.86, 0.35, 1)
+    data["panel_opacity"] = _clamp_float(data.get("panel_opacity"), 0.82, 0.35, 1)
     if data.get("background_position") not in {"center center", "top center", "bottom center"}:
         data["background_position"] = DEFAULT_THEME_SETTINGS["background_position"]
     return data

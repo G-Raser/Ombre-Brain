@@ -24,9 +24,11 @@
     var DEFAULT_THEME_SETTINGS = {
       background_enabled: false,
       background_url: null,
-      background_dim: 0.72,
+      background_dim: 0.45,
       background_blur: 0,
-      background_position: 'center center'
+      background_position: 'center center',
+      card_opacity: 0.86,
+      panel_opacity: 0.82
     };
     var DEFAULT_UI_SETTINGS = {
       theme: DEFAULT_THEME,
@@ -48,8 +50,10 @@
       t.background_enabled = !!t.background_enabled && !!t.background_url;
       t.background_url = (typeof t.background_url === 'string' && t.background_url.indexOf('/user-assets/backgrounds/') === 0) ? t.background_url : null;
       if (!t.background_url) t.background_enabled = false;
-      t.background_dim = Math.max(0.45, Math.min(0.90, parseFloat(t.background_dim || 0.72)));
+      t.background_dim = Math.max(0, Math.min(1, parseFloat(t.background_dim ?? 0.45)));
       t.background_blur = Math.max(0, Math.min(8, parseFloat(t.background_blur || 0)));
+      t.card_opacity = Math.max(0.35, Math.min(1, parseFloat(t.card_opacity ?? 0.86)));
+      t.panel_opacity = Math.max(0.35, Math.min(1, parseFloat(t.panel_opacity ?? 0.82)));
       if (['center center', 'top center', 'bottom center'].indexOf(t.background_position) < 0) t.background_position = 'center center';
       return t;
     }
@@ -67,7 +71,7 @@
           s.themes[theme] = normalizeThemeSettings(raw.themes[theme]);
         });
       }
-      var legacyFields = ['background_enabled', 'background_url', 'background_dim', 'background_blur', 'background_position'];
+      var legacyFields = ['background_enabled', 'background_url', 'background_dim', 'background_blur', 'background_position', 'card_opacity', 'panel_opacity'];
       if (legacyFields.some(function(k) { return Object.prototype.hasOwnProperty.call(raw, k); })) {
         var legacy = {};
         legacyFields.forEach(function(k) {
@@ -88,28 +92,35 @@
         });
       }
       var themePatch = {};
-      ['background_enabled', 'background_url', 'background_dim', 'background_blur', 'background_position'].forEach(function(k) {
+      ['background_enabled', 'background_url', 'background_dim', 'background_blur', 'background_position', 'card_opacity', 'panel_opacity'].forEach(function(k) {
         if (Object.prototype.hasOwnProperty.call(patch, k)) themePatch[k] = patch[k];
       });
       if (Object.keys(themePatch).length) {
         var targetTheme = normalizeTheme(patch.target_theme || next.theme);
         next.themes[targetTheme] = normalizeThemeSettings(Object.assign({}, next.themes[targetTheme], themePatch));
       }
-      ['background_enabled', 'background_url', 'background_dim', 'background_blur', 'background_position'].forEach(function(k) {
+      ['background_enabled', 'background_url', 'background_dim', 'background_blur', 'background_position', 'card_opacity', 'panel_opacity'].forEach(function(k) {
         delete next[k];
       });
       return normalizeUiSettings(next);
     }
     window.uiSettingsWithPatch = uiSettingsWithPatch;
-    function updateThemePickerLabel(theme) {
+    function getDashboardThemeLabel(theme) {
       var label = {
         'ombre-original': 'Ombre Original',
         'umi-purple': 'Umi Purple',
         'cattea-gold-black': 'Cattea Gold Black',
         'cc-gold-brown': 'CC Gold Brown'
       }[theme] || 'Umi Purple';
+      return label;
+    }
+    window.getDashboardThemeLabel = getDashboardThemeLabel;
+    function updateThemePickerLabel(theme) {
+      var label = getDashboardThemeLabel(theme);
       var btn = document.getElementById('theme-dropdown-current');
       if (btn) btn.textContent = label;
+      var bgTheme = document.getElementById('ui-bg-current-theme');
+      if (bgTheme) bgTheme.textContent = label;
       var select = document.getElementById('theme-select');
       if (select && select.value !== theme) select.value = theme;
       document.querySelectorAll('.theme-option').forEach(function(opt) {
@@ -124,9 +135,12 @@
       document.documentElement.setAttribute('data-show-mascot', settings.show_mascot ? 'true' : 'false');
       document.documentElement.style.setProperty('--custom-bg-image', settings.background_url ? 'url("' + settings.background_url.replace(/"/g, '%22') + '")' : 'none');
       document.documentElement.style.setProperty('--custom-bg-dim', String(settings.background_dim));
+      document.documentElement.style.setProperty('--bg-dim-opacity', String(settings.background_dim));
       document.documentElement.style.setProperty('--custom-bg-blur', String(settings.background_blur) + 'px');
       document.documentElement.style.setProperty('--custom-bg-mobile-blur', String(Math.min(Number(settings.background_blur) || 0, 2)) + 'px');
       document.documentElement.style.setProperty('--custom-bg-position', settings.background_position);
+      document.documentElement.style.setProperty('--custom-card-opacity', String(settings.card_opacity));
+      document.documentElement.style.setProperty('--custom-panel-opacity', String(settings.panel_opacity));
       var meta = document.querySelector('meta[name="theme-color"]');
       if (meta) meta.setAttribute('content', THEMES[settings.theme]);
       updateThemePickerLabel(settings.theme);
@@ -139,7 +153,7 @@
     window.saveDashboardUiSettings = async function(patch) {
       patch = patch || {};
       var currentTheme = (window.OMBRE_UI_SETTINGS && window.OMBRE_UI_SETTINGS.theme) || DEFAULT_THEME;
-      var hasThemeBackgroundPatch = ['background_enabled', 'background_url', 'background_dim', 'background_blur', 'background_position'].some(function(k) {
+      var hasThemeBackgroundPatch = ['background_enabled', 'background_url', 'background_dim', 'background_blur', 'background_position', 'card_opacity', 'panel_opacity'].some(function(k) {
         return Object.prototype.hasOwnProperty.call(patch, k);
       });
       var payload = Object.assign({}, patch);
@@ -217,6 +231,14 @@
     --panel-strong: rgba(18, 15, 27, 0.86);
     --card: rgba(28, 24, 42, 0.72);
     --card-hover: rgba(34, 29, 50, 0.76);
+    --panel-rgb: 15, 13, 24;
+    --panel-strong-rgb: 18, 15, 27;
+    --card-rgb: 28, 24, 42;
+    --card-hover-rgb: 34, 29, 50;
+    --panel-glass-bg: rgba(var(--panel-rgb), var(--custom-panel-opacity, 0.82));
+    --panel-strong-glass-bg: rgba(var(--panel-strong-rgb), var(--custom-panel-opacity, 0.82));
+    --card-glass-bg: rgba(var(--card-rgb), var(--custom-card-opacity, 0.86));
+    --card-hover-glass-bg: rgba(var(--card-hover-rgb), var(--custom-card-opacity, 0.86));
     --border: rgba(210, 195, 255, 0.13);
     --border-soft: rgba(210, 195, 255, 0.08);
     --text: #F1ECFA;
@@ -263,6 +285,14 @@
     --panel-strong: #EDE8DE;
     --card: #F4F0E8;
     --card-hover: #FAF6EE;
+    --panel-rgb: 244, 240, 232;
+    --panel-strong-rgb: 237, 232, 222;
+    --card-rgb: 244, 240, 232;
+    --card-hover-rgb: 250, 246, 238;
+    --panel-glass-bg: rgba(var(--panel-rgb), var(--custom-panel-opacity, 0.82));
+    --panel-strong-glass-bg: rgba(var(--panel-strong-rgb), var(--custom-panel-opacity, 0.82));
+    --card-glass-bg: rgba(var(--card-rgb), var(--custom-card-opacity, 0.86));
+    --card-hover-glass-bg: rgba(var(--card-hover-rgb), var(--custom-card-opacity, 0.86));
     --border: #DCD6CA;
     --border-soft: #E8E1D6;
     --text: #2C2A26;
@@ -308,6 +338,14 @@
     --panel-strong: #1C1D1F;
     --card: #202123;
     --card-hover: #28292B;
+    --panel-rgb: 21, 22, 23;
+    --panel-strong-rgb: 28, 29, 31;
+    --card-rgb: 32, 33, 35;
+    --card-hover-rgb: 40, 41, 43;
+    --panel-glass-bg: rgba(var(--panel-rgb), var(--custom-panel-opacity, 0.82));
+    --panel-strong-glass-bg: rgba(var(--panel-strong-rgb), var(--custom-panel-opacity, 0.82));
+    --card-glass-bg: rgba(var(--card-rgb), var(--custom-card-opacity, 0.86));
+    --card-hover-glass-bg: rgba(var(--card-hover-rgb), var(--custom-card-opacity, 0.86));
     --border: #3F3A30;
     --border-soft: #2D2B27;
     --text: #F2EDE2;
@@ -350,6 +388,14 @@
     --panel-strong: #332319;
     --card: #3A2A20;
     --card-hover: #443126;
+    --panel-rgb: 42, 29, 21;
+    --panel-strong-rgb: 51, 35, 25;
+    --card-rgb: 58, 42, 32;
+    --card-hover-rgb: 68, 49, 38;
+    --panel-glass-bg: rgba(var(--panel-rgb), var(--custom-panel-opacity, 0.82));
+    --panel-strong-glass-bg: rgba(var(--panel-strong-rgb), var(--custom-panel-opacity, 0.82));
+    --card-glass-bg: rgba(var(--card-rgb), var(--custom-card-opacity, 0.86));
+    --card-hover-glass-bg: rgba(var(--card-hover-rgb), var(--custom-card-opacity, 0.86));
     --border: #5B4630;
     --border-soft: #473523;
     --text: #F7EBD7;
@@ -434,11 +480,11 @@
   body::after {
     z-index: -1;
     background:
-      linear-gradient(180deg, rgba(7, 6, 13, var(--custom-bg-dim, 0.72)), rgba(5, 5, 10, calc(var(--custom-bg-dim, 0.72) + 0.05))),
-      radial-gradient(circle at 70% 10%, rgba(82, 58, 148, 0.18), transparent 44%);
+      linear-gradient(180deg, rgba(7, 6, 13, var(--bg-dim-opacity, 0.45)), rgba(5, 5, 10, var(--bg-dim-opacity, 0.45))),
+      radial-gradient(circle at 70% 10%, rgba(82, 58, 148, calc(var(--bg-dim-opacity, 0.45) * 0.32)), transparent 44%);
   }
-  html[data-theme="umi-purple"][data-bg-enabled="true"] body::before,
-  html[data-theme="umi-purple"][data-bg-enabled="true"] body::after {
+  html[data-bg-enabled="true"] body::before,
+  html[data-bg-enabled="true"] body::after {
     opacity: 1;
   }
   @media (max-width: 768px), (hover: none), (pointer: coarse) {
@@ -498,12 +544,17 @@
     font-size: 11px;
   }
   .header-actions {
+    position: relative;
+    z-index: 80;
     display: flex;
     align-items: center;
     gap: 6px;
     margin-left: 6px;
+    overflow: visible;
   }
   .theme-picker {
+    position: relative;
+    z-index: 80;
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -515,6 +566,7 @@
     color: var(--text-muted);
     box-shadow: 3px 3px 7px var(--shadow-dark-subtle), -3px -3px 6px var(--shadow-light);
     flex-shrink: 0;
+    overflow: visible;
   }
   .theme-picker i {
     color: var(--accent);
@@ -539,9 +591,13 @@
   }
   .theme-dropdown {
     position: relative;
+    z-index: 90;
     display: inline-flex;
     align-items: center;
     min-width: 210px;
+  }
+  .theme-dropdown.open {
+    z-index: 1200;
   }
   .theme-dropdown-button {
     width: 100%;
@@ -565,7 +621,7 @@
     min-width: 100%;
     padding: 6px;
     display: none;
-    z-index: 1000;
+    z-index: 1201;
     border: 1px solid var(--border);
     border-radius: var(--radius-control);
     background: color-mix(in srgb, var(--panel-strong) 94%, #000);
@@ -607,7 +663,7 @@
   .ui-settings-card {
     border: 1px solid var(--border);
     border-radius: var(--radius-inner);
-    background: var(--surface-solid);
+    background: var(--card-glass-bg);
     padding: 14px;
   }
   .ui-bg-preview {
@@ -2565,8 +2621,9 @@
       width: 100%;
     }
     .header-actions {
-      overflow-x: auto;
-      padding-bottom: 4px;
+      overflow: visible;
+      flex-wrap: wrap;
+      padding-bottom: 0;
       -webkit-overflow-scrolling: touch;
     }
 
@@ -2941,7 +2998,7 @@
   }
 
   .header {
-    background: color-mix(in srgb, var(--panel) 92%, transparent) !important;
+    background: var(--panel-glass-bg) !important;
     border-bottom: 1px solid var(--border-soft) !important;
     box-shadow: var(--shadow) !important;
     flex-wrap: wrap;
@@ -2974,7 +3031,7 @@
   }
 
   .tabs {
-    background: color-mix(in srgb, var(--panel-strong) 90%, transparent) !important;
+    background: var(--panel-strong-glass-bg) !important;
     border: 1px solid var(--border-soft) !important;
     box-shadow: inset 0 1px 0 var(--shadow-light), var(--shadow) !important;
     overflow-x: auto;
@@ -2984,7 +3041,7 @@
   .tab {
     font-family: var(--font-ui) !important;
     letter-spacing: 0 !important;
-    background: var(--button-bg) !important;
+    background: var(--panel-strong-glass-bg) !important;
     color: var(--text-muted) !important;
     border: 1px solid var(--button-border) !important;
     min-width: 94px;
@@ -3007,7 +3064,7 @@
   }
   .tab:hover {
     color: var(--text) !important;
-    background: var(--card-hover) !important;
+    background: var(--card-hover-glass-bg) !important;
   }
   .tab.active {
     color: var(--accent) !important;
@@ -3029,13 +3086,14 @@
   .review-card,
   .review-detail-shell,
   .review-raw-details,
+  .ui-settings-card,
   .detail-panel {
-    background: var(--card) !important;
+    background: var(--card-glass-bg) !important;
     border-color: var(--border-soft) !important;
   }
   .bucket-row:hover,
   .review-card:hover {
-    background: var(--card-hover) !important;
+    background: var(--card-hover-glass-bg) !important;
   }
   .config-section h3,
   .review-detail-section h4,
@@ -3081,7 +3139,7 @@
   }
   .review-body-pre,
   .review-raw-details {
-    background: var(--panel-strong) !important;
+    background: var(--panel-strong-glass-bg) !important;
     border: 1px solid var(--border-soft) !important;
   }
 
@@ -3119,7 +3177,7 @@
   }
   html[data-theme="umi-purple"] .header,
   html[data-theme="umi-purple"] .tabs {
-    background: rgba(10, 8, 17, 0.88) !important;
+    background: var(--panel-glass-bg) !important;
     border-color: var(--border) !important;
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(235, 225, 255, 0.024) !important;
     backdrop-filter: blur(10px);
@@ -3129,7 +3187,7 @@
     gap: 6px !important;
   }
   html[data-theme="umi-purple"] .tab {
-    background: rgba(18, 15, 27, 0.72) !important;
+    background: var(--panel-strong-glass-bg) !important;
     border-color: rgba(210, 195, 255, 0.105) !important;
     border-radius: 6px !important;
     color: var(--text-muted) !important;
@@ -3138,12 +3196,12 @@
     text-transform: none !important;
   }
   html[data-theme="umi-purple"] .tab:hover {
-    background: rgba(24, 20, 34, 0.82) !important;
+    background: var(--card-hover-glass-bg) !important;
     border-color: rgba(210, 195, 255, 0.17) !important;
     transform: translateY(-1px);
   }
   html[data-theme="umi-purple"] .tab.active {
-    background: rgba(30, 25, 43, 0.82) !important;
+    background: var(--card-hover-glass-bg) !important;
     border-color: rgba(197, 183, 238, 0.30) !important;
     box-shadow: inset 0 0 0 1px rgba(210, 195, 255, 0.055), 0 7px 16px rgba(0, 0, 0, 0.18) !important;
     color: var(--accent-strong) !important;
@@ -3181,7 +3239,7 @@
   html[data-theme="umi-purple"] input,
   html[data-theme="umi-purple"] select,
   html[data-theme="umi-purple"] textarea {
-    background: rgba(12, 10, 19, 0.88) !important;
+    background: var(--panel-glass-bg) !important;
     border: 1px solid rgba(210, 195, 255, 0.11) !important;
     border-radius: 6px !important;
     box-shadow: inset 0 1px 0 rgba(235, 225, 255, 0.018), 0 8px 20px rgba(0, 0, 0, 0.16) !important;
@@ -3192,7 +3250,7 @@
   }
   html[data-theme="umi-purple"] .theme-option:hover,
   html[data-theme="umi-purple"] .theme-option.selected {
-    background: rgba(35, 29, 49, 0.84) !important;
+    background: var(--card-hover-glass-bg) !important;
     border-color: rgba(197, 183, 238, 0.24) !important;
     color: var(--text) !important;
   }
@@ -3208,8 +3266,9 @@
   html[data-theme="umi-purple"] .review-raw-details,
   html[data-theme="umi-purple"] .journal-entry,
   html[data-theme="umi-purple"] .journal-metadata-details,
+  html[data-theme="umi-purple"] .ui-settings-card,
   html[data-theme="umi-purple"] .detail-panel {
-    background: linear-gradient(180deg, rgba(24, 20, 34, 0.76), rgba(18, 15, 27, 0.84)) !important;
+    background: linear-gradient(180deg, var(--card-glass-bg), var(--panel-strong-glass-bg)) !important;
     border-color: var(--border) !important;
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.30), inset 0 1px 0 rgba(235, 225, 255, 0.024) !important;
     backdrop-filter: blur(8px);
@@ -3236,7 +3295,7 @@
   }
   html[data-theme="umi-purple"] .bucket-row:hover,
   html[data-theme="umi-purple"] .review-card:hover {
-    background: linear-gradient(180deg, rgba(29, 24, 40, 0.82), rgba(22, 18, 32, 0.90)) !important;
+    background: linear-gradient(180deg, var(--card-hover-glass-bg), var(--card-glass-bg)) !important;
     box-shadow: 0 13px 30px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(235, 225, 255, 0.028) !important;
   }
   html[data-theme="umi-purple"] .btn-primary,
@@ -3250,7 +3309,7 @@
   html[data-theme="umi-purple"] .btn-secondary,
   html[data-theme="umi-purple"] .filter-btn,
   html[data-theme="umi-purple"] button:not(.btn-primary):not(.btn-danger):not(.tab):not(.close-btn) {
-    background: rgba(16, 13, 24, 0.82) !important;
+    background: var(--panel-strong-glass-bg) !important;
     border: 1px solid rgba(210, 195, 255, 0.105) !important;
     box-shadow: 0 7px 16px rgba(0, 0, 0, 0.20), inset 0 1px 0 rgba(235, 225, 255, 0.018) !important;
     color: var(--text-muted) !important;
@@ -3281,7 +3340,7 @@
   }
   html[data-theme="umi-purple"] .filter-btn.active {
     color: var(--accent-strong) !important;
-    background: rgba(35, 29, 49, 0.84) !important;
+    background: var(--card-hover-glass-bg) !important;
     border-color: rgba(197, 183, 238, 0.24) !important;
     box-shadow: inset 0 0 0 1px rgba(210, 195, 255, 0.045), 0 7px 16px rgba(0, 0, 0, 0.18) !important;
   }
@@ -3335,7 +3394,7 @@
   html[data-theme="umi-purple"] .review-raw-details,
   html[data-theme="umi-purple"] pre,
   html[data-theme="umi-purple"] code {
-    background: rgba(12, 10, 19, 0.86) !important;
+    background: var(--panel-strong-glass-bg) !important;
     border-color: rgba(210, 195, 255, 0.085) !important;
   }
 
@@ -3346,6 +3405,12 @@
     .theme-picker {
       width: max-content;
       max-width: 100%;
+    }
+    .theme-dropdown-menu {
+      left: 0;
+      right: auto;
+      width: max-content;
+      max-width: calc(100vw - 24px);
     }
     .theme-picker select {
       min-width: 138px;
@@ -3455,14 +3520,14 @@
     }
     html[data-theme="umi-purple"] .filter-toggle,
     html[data-theme="umi-purple"] .bucket-tag-more {
-      background: rgba(16, 13, 24, 0.82) !important;
+      background: var(--panel-strong-glass-bg) !important;
       border-color: rgba(210, 195, 255, 0.14) !important;
       color: var(--text-muted) !important;
       border-radius: 6px !important;
       box-shadow: 0 6px 14px rgba(0, 0, 0, 0.20), inset 0 1px 0 rgba(235, 225, 255, 0.018) !important;
     }
     html[data-theme="umi-purple"] .filter-toggle {
-      background: rgba(12, 10, 19, 0.88) !important;
+      background: var(--panel-glass-bg) !important;
       border-color: rgba(165, 145, 220, 0.32) !important;
       color: #CFC3EF !important;
       box-shadow: inset 0 0 0 1px rgba(210, 195, 255, 0.035), 0 6px 14px rgba(0, 0, 0, 0.18) !important;
@@ -3471,7 +3536,7 @@
     html[data-theme="umi-purple"] .bucket-tag-more:hover {
       color: var(--accent-strong) !important;
       border-color: rgba(197, 183, 238, 0.24) !important;
-      background: rgba(24, 20, 34, 0.86) !important;
+      background: var(--card-hover-glass-bg) !important;
     }
   }
 </style>
@@ -3530,15 +3595,15 @@
         <option value="cc-gold-brown">CC Gold Brown</option>
       </select>
       <div class="theme-dropdown" id="theme-dropdown">
-        <button type="button" class="theme-dropdown-button" onclick="toggleThemeDropdown(event)" aria-haspopup="listbox" aria-expanded="false">
+        <button type="button" class="theme-dropdown-button" aria-haspopup="listbox" aria-expanded="false">
           <span id="theme-dropdown-current">Umi Purple</span>
           <i data-lucide="chevron-down" style="width:14px;height:14px;"></i>
         </button>
         <div class="theme-dropdown-menu" role="listbox">
-          <button type="button" class="theme-option" data-theme-value="ombre-original" onclick="chooseDashboardTheme('ombre-original')">Ombre Original</button>
-          <button type="button" class="theme-option" data-theme-value="umi-purple" onclick="chooseDashboardTheme('umi-purple')">Umi Purple</button>
-          <button type="button" class="theme-option" data-theme-value="cattea-gold-black" onclick="chooseDashboardTheme('cattea-gold-black')">Cattea Gold Black</button>
-          <button type="button" class="theme-option" data-theme-value="cc-gold-brown" onclick="chooseDashboardTheme('cc-gold-brown')">CC Gold Brown</button>
+          <button type="button" class="theme-option" data-theme-value="ombre-original">Ombre Original</button>
+          <button type="button" class="theme-option" data-theme-value="umi-purple">Umi Purple</button>
+          <button type="button" class="theme-option" data-theme-value="cattea-gold-black">Cattea Gold Black</button>
+          <button type="button" class="theme-option" data-theme-value="cc-gold-brown">CC Gold Brown</button>
         </div>
       </div>
     </div>
@@ -4100,6 +4165,9 @@
         <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;line-height:1.6;">
           背景图、主题和小鸡开关会保存到服务器端 <code>buckets/user_settings/ui.json</code>，手机和电脑访问同一个服务时会保持一致。
         </div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.5;">
+          当前正在设置：<strong id="ui-bg-current-theme">Umi Purple</strong>
+        </div>
         <div class="ui-settings-grid">
           <div class="ui-settings-card">
             <div class="ui-bg-preview" id="ui-bg-preview"></div>
@@ -4121,8 +4189,8 @@
             </label>
             <div class="ui-range-row">
               <label for="ui-bg-dim">背景暗度</label>
-              <input type="range" id="ui-bg-dim" min="0.45" max="0.90" step="0.01" value="0.72" oninput="updateUiRangeLabels(); applyUiSettingsFromControls(false)" onchange="saveUiSettingsFromControls()" />
-              <span id="ui-bg-dim-label">0.72</span>
+              <input type="range" id="ui-bg-dim" min="0" max="1" step="0.01" value="0.45" oninput="updateUiRangeLabels(); applyUiSettingsFromControls(false)" onchange="saveUiSettingsFromControls()" />
+              <span id="ui-bg-dim-label">0.45</span>
             </div>
             <div class="ui-range-row">
               <label for="ui-bg-blur">背景模糊</label>
@@ -4136,6 +4204,16 @@
                 <option value="top center">top center</option>
                 <option value="bottom center">bottom center</option>
               </select>
+            </div>
+            <div class="ui-range-row">
+              <label for="ui-card-opacity">卡片透明度 / Card opacity</label>
+              <input type="range" id="ui-card-opacity" min="0.35" max="1" step="0.01" value="0.86" oninput="updateUiRangeLabels(); applyUiSettingsFromControls(false)" onchange="saveUiSettingsFromControls()" />
+              <span id="ui-card-opacity-label">0.86</span>
+            </div>
+            <div class="ui-range-row">
+              <label for="ui-panel-opacity">主面板透明度 / Panel opacity</label>
+              <input type="range" id="ui-panel-opacity" min="0.35" max="1" step="0.01" value="0.82" oninput="updateUiRangeLabels(); applyUiSettingsFromControls(false)" onchange="saveUiSettingsFromControls()" />
+              <span id="ui-panel-opacity-label">0.82</span>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
               <button onclick="resetUiSettings()" class="btn-danger" style="height:34px;padding:0 12px;">恢复默认 UI 设置</button>
@@ -5688,18 +5766,44 @@ function chooseDashboardTheme(theme) {
   closeThemeDropdown();
   setDashboardTheme(theme);
 }
-document.addEventListener('click', function(e) {
-  var dd = document.getElementById('theme-dropdown');
-  if (dd && !dd.contains(e.target)) closeThemeDropdown();
-});
+function initThemeDropdown() {
+  if (window.__themeDropdownBound) return;
+  window.__themeDropdownBound = true;
+  document.addEventListener('click', function(e) {
+    var target = e.target && e.target.closest ? e.target : null;
+    var button = target ? target.closest('.theme-dropdown-button') : null;
+    var option = target ? target.closest('.theme-option') : null;
+    var dropdown = target ? target.closest('.theme-dropdown') : null;
+    if (button) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleThemeDropdown(e);
+      return;
+    }
+    if (option) {
+      e.preventDefault();
+      e.stopPropagation();
+      chooseDashboardTheme(option.getAttribute('data-theme-value') || 'umi-purple');
+      return;
+    }
+    if (!dropdown) closeThemeDropdown();
+  });
+}
+initThemeDropdown();
 
 function updateUiRangeLabels() {
   var dim = document.getElementById('ui-bg-dim');
   var blur = document.getElementById('ui-bg-blur');
+  var cardOpacity = document.getElementById('ui-card-opacity');
+  var panelOpacity = document.getElementById('ui-panel-opacity');
   var dimLabel = document.getElementById('ui-bg-dim-label');
   var blurLabel = document.getElementById('ui-bg-blur-label');
-  if (dimLabel && dim) dimLabel.textContent = Number(dim.value || 0.72).toFixed(2);
+  var cardOpacityLabel = document.getElementById('ui-card-opacity-label');
+  var panelOpacityLabel = document.getElementById('ui-panel-opacity-label');
+  if (dimLabel && dim) dimLabel.textContent = Number(dim.value || 0.45).toFixed(2);
   if (blurLabel && blur) blurLabel.textContent = String(parseInt(blur.value || '0', 10)) + 'px';
+  if (cardOpacityLabel && cardOpacity) cardOpacityLabel.textContent = Number(cardOpacity.value || 0.86).toFixed(2);
+  if (panelOpacityLabel && panelOpacity) panelOpacityLabel.textContent = Number(panelOpacity.value || 0.82).toFixed(2);
 }
 function syncUiSettingsControls(settings) {
   settings = settings || window.OMBRE_UI_SETTINGS || {};
@@ -5708,11 +5812,17 @@ function syncUiSettingsControls(settings) {
   var dim = document.getElementById('ui-bg-dim');
   var blur = document.getElementById('ui-bg-blur');
   var pos = document.getElementById('ui-bg-position');
+  var cardOpacity = document.getElementById('ui-card-opacity');
+  var panelOpacity = document.getElementById('ui-panel-opacity');
+  var bgTheme = document.getElementById('ui-bg-current-theme');
   if (enabled) enabled.checked = !!settings.background_enabled;
   if (mascot) mascot.checked = !!settings.show_mascot;
-  if (dim) dim.value = settings.background_dim != null ? settings.background_dim : 0.72;
+  if (dim) dim.value = settings.background_dim != null ? settings.background_dim : 0.45;
   if (blur) blur.value = settings.background_blur != null ? settings.background_blur : 0;
   if (pos) pos.value = settings.background_position || 'center center';
+  if (cardOpacity) cardOpacity.value = settings.card_opacity != null ? settings.card_opacity : 0.86;
+  if (panelOpacity) panelOpacity.value = settings.panel_opacity != null ? settings.panel_opacity : 0.82;
+  if (bgTheme) bgTheme.textContent = window.getDashboardThemeLabel ? window.getDashboardThemeLabel(settings.theme) : (settings.theme || 'umi-purple');
   updateUiRangeLabels();
 }
 function collectUiSettingsFromControls() {
@@ -5721,12 +5831,16 @@ function collectUiSettingsFromControls() {
   var dim = document.getElementById('ui-bg-dim');
   var blur = document.getElementById('ui-bg-blur');
   var pos = document.getElementById('ui-bg-position');
+  var cardOpacity = document.getElementById('ui-card-opacity');
+  var panelOpacity = document.getElementById('ui-panel-opacity');
   var current = window.OMBRE_UI_SETTINGS || {};
   return {
     background_enabled: enabled ? enabled.checked : !!current.background_enabled,
-    background_dim: dim ? parseFloat(dim.value) : (current.background_dim || 0.72),
+    background_dim: dim ? parseFloat(dim.value) : (current.background_dim ?? 0.45),
     background_blur: blur ? parseFloat(blur.value) : (current.background_blur || 0),
     background_position: pos ? pos.value : (current.background_position || 'center center'),
+    card_opacity: cardOpacity ? parseFloat(cardOpacity.value) : (current.card_opacity ?? 0.86),
+    panel_opacity: panelOpacity ? parseFloat(panelOpacity.value) : (current.panel_opacity ?? 0.82),
     show_mascot: mascot ? mascot.checked : !!current.show_mascot
   };
 }
@@ -5796,16 +5910,20 @@ async function clearUiBackground() {
   }
 }
 async function resetUiSettings() {
-  if (!confirm('恢复默认 UI 设置？这会关闭背景图和小鸡，并切回 Umi Purple。')) return;
+  var currentTheme = window.getDashboardTheme ? window.getDashboardTheme() : 'umi-purple';
+  var themeLabel = window.getDashboardThemeLabel ? window.getDashboardThemeLabel(currentTheme) : currentTheme;
+  if (!confirm('恢复 ' + themeLabel + ' 的默认 UI 设置？这只会关闭当前主题的背景图显示并恢复透明度，不影响其他主题，也不会删除已上传背景图。')) return;
+  var currentThemes = (window.OMBRE_UI_SETTINGS && window.OMBRE_UI_SETTINGS.themes) || {};
+  var current = currentThemes[currentTheme] || {};
   var defaults = {
-    theme: 'umi-purple',
-    show_mascot: false,
-    themes: {
-      'ombre-original': {background_enabled: false, background_url: null, background_dim: 0.72, background_blur: 0, background_position: 'center center'},
-      'umi-purple': {background_enabled: false, background_url: null, background_dim: 0.72, background_blur: 0, background_position: 'center center'},
-      'cattea-gold-black': {background_enabled: false, background_url: null, background_dim: 0.72, background_blur: 0, background_position: 'center center'},
-      'cc-gold-brown': {background_enabled: false, background_url: null, background_dim: 0.72, background_blur: 0, background_position: 'center center'}
-    }
+    target_theme: currentTheme,
+    background_enabled: false,
+    background_url: current.background_url || null,
+    background_dim: 0.45,
+    background_blur: 0,
+    background_position: 'center center',
+    card_opacity: 0.86,
+    panel_opacity: 0.82
   };
   var msg = document.getElementById('ui-settings-status');
   try {
