@@ -69,6 +69,7 @@ from tools import plan as _t_plan
 from tools import dream as _t_dream
 from tools import i as _t_i
 from tools import review_gate as _t_review_gate
+from tools import journal as _t_journal
 from tools._common import (
     check_content_size as _check_content_size,
     check_pinned_quota as _check_pinned_quota,
@@ -843,6 +844,91 @@ async def approve_pending_memory(
         ),
         op="approve_pending_memory",
         args={"candidate_id": candidate_id, "dry_run": dry_run, "confirmed": confirmed},
+    )
+
+
+@mcp_extra.tool()
+async def journal_write(
+    content: str,
+    title: Optional[str] = "",
+    entry_type: Optional[str] = "free",
+    tags: Optional[str] = "",
+    domain: Optional[str] = "",
+    importance: Optional[int] = 5,
+    author: Optional[str] = "agent",
+    related_buckets: Optional[str] = "",
+    related_journals: Optional[str] = "",
+    mood: Optional[str] = "",
+    date: Optional[str] = "",
+    status: Optional[str] = "active",
+) -> str:
+    """写入一篇 journal 日记，完整保留正文到 buckets/journals/。entry_type=handoff/event/free；不会进入普通 buckets 或 review gate。"""
+    async def _run() -> str:
+        result = await _t_journal.journal_write(
+            content=content,
+            title=title or "",
+            entry_type=entry_type or "free",
+            tags=tags or "",
+            domain=domain or "",
+            importance=importance if importance is not None else 5,
+            author=author or "agent",
+            related_buckets=related_buckets or "",
+            related_journals=related_journals or "",
+            mood=mood or "",
+            date=date or "",
+            status=status or "active",
+            source="mcp",
+        )
+        return _json_lib.dumps({"ok": True, **result}, ensure_ascii=False, indent=2)
+
+    return await _with_notice(
+        _run(),
+        op="journal_write",
+        args={
+            "content_len": len(content or ""),
+            "entry_type": entry_type,
+            "tags": tags,
+            "domain": domain,
+            "importance": importance,
+            "author": author,
+        },
+    )
+
+
+@mcp_extra.tool()
+async def journal_read(
+    query: Optional[str] = "",
+    entry_type: Optional[str] = "",
+    date_from: Optional[str] = "",
+    date_to: Optional[str] = "",
+    tags: Optional[str] = "",
+    domain: Optional[str] = "",
+    max_results: Optional[int] = 10,
+    include_full: Optional[bool] = False,
+) -> str:
+    """读取 journal 日记。支持 query 关键词、entry_type、日期、tags/domain 过滤；include_full=True 返回完整正文。"""
+    return await _with_notice(
+        _t_journal.journal_read_json(
+            query=query or "",
+            entry_type=entry_type or "",
+            date_from=date_from or "",
+            date_to=date_to or "",
+            tags=tags or "",
+            domain=domain or "",
+            max_results=max_results if max_results is not None else 10,
+            include_full=include_full if include_full is not None else False,
+        ),
+        op="journal_read",
+        args={
+            "query": query,
+            "entry_type": entry_type,
+            "date_from": date_from,
+            "date_to": date_to,
+            "tags": tags,
+            "domain": domain,
+            "max_results": max_results,
+            "include_full": include_full,
+        },
     )
 
 

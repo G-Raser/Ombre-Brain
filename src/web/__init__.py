@@ -31,6 +31,7 @@ from . import ollama_local
 from . import config_api
 from . import review
 from . import ui_settings
+from . import journal
 
 
 def register_all(mcp) -> None:
@@ -53,3 +54,4 @@ def register_all(mcp) -> None:
     config_api.register(mcp)
     review.register(mcp)
     ui_settings.register(mcp)
+    journal.register(mcp)

@@ -3371,6 +3371,7 @@
   <div class="tab" data-tab="tools"><span>工具箱</span><span class="tab-en">Toolbox</span></div>
   <div class="tab" data-tab="plan"><span>计划</span><span class="tab-en">Plans</span></div>
   <div class="tab" data-tab="letters"><span>信</span><span class="tab-en">Letters</span></div>
+  <div class="tab" data-tab="journal"><span>日记</span><span class="tab-en">Journal</span></div>
   <div class="tab" data-tab="anchors"><span>锚点</span><span class="tab-en">Anchors</span></div>
   <div class="tab" data-tab="import"><span>导入</span><span class="tab-en">Import</span></div>
   <div class="tab" data-tab="review"><span>审核</span><span class="tab-en">Review</span></div>
@@ -3593,6 +3594,37 @@
         <button onclick="clearReviewDetail()" title="关闭详情" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="x"></i> 关闭</button>
       </div>
       <div id="review-detail" style="font-size:12px;line-height:1.7;color:var(--text);"></div>
+    </div>
+  </div>
+</div>
+
+<div class="content" id="journal-view" style="display:none">
+  <div style="max-width:1080px;margin:0 auto;">
+    <div class="config-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+        <h3 style="margin:0;">日记 / Journal</h3>
+        <button class="btn-secondary" onclick="loadJournals()" title="刷新日记" style="padding:8px 14px;font-size:12px;display:inline-flex;align-items:center;gap:5px;"><i data-lucide="refresh-cw"></i> 刷新</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+        <button id="journal-tab-all" class="btn-secondary" onclick="setJournalType('')" style="padding:7px 12px;font-size:12px;">全部</button>
+        <button id="journal-tab-handoff" class="btn-secondary" onclick="setJournalType('handoff')" style="padding:7px 12px;font-size:12px;">交接</button>
+        <button id="journal-tab-event" class="btn-secondary" onclick="setJournalType('event')" style="padding:7px 12px;font-size:12px;">事件</button>
+        <button id="journal-tab-free" class="btn-secondary" onclick="setJournalType('free')" style="padding:7px 12px;font-size:12px;">自由</button>
+        <input type="text" id="journal-query" placeholder="搜索标题或正文…" onkeydown="if(event.key==='Enter')loadJournals()" style="min-width:220px;flex:1;" />
+        <button onclick="loadJournals()" title="搜索" style="height:34px;padding:0 12px;"><i data-lucide="search"></i></button>
+      </div>
+      <div id="journal-meta" style="font-size:12px;color:var(--text-dim);min-height:18px;margin-bottom:10px;"></div>
+      <div id="journal-list" style="display:flex;flex-direction:column;gap:10px;">
+        <div class="loading">加载中…</div>
+      </div>
+    </div>
+
+    <div class="config-section" id="journal-detail-panel" style="display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
+        <h3 style="margin:0;">日记详情</h3>
+        <button onclick="clearJournalDetail()" title="关闭详情" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="x"></i> 关闭</button>
+      </div>
+      <div id="journal-detail" style="font-size:13px;line-height:1.75;color:var(--text);"></div>
     </div>
   </div>
 </div>
@@ -5618,6 +5650,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.getElementById('plan-view').style.display = target === 'plan' ? '' : 'none';
     document.getElementById('import-view').style.display = target === 'import' ? '' : 'none';
     document.getElementById('review-view').style.display = target === 'review' ? '' : 'none';
+    document.getElementById('journal-view').style.display = target === 'journal' ? '' : 'none';
     document.getElementById('logs-view').style.display = target === 'logs' ? '' : 'none';
     document.getElementById('v3-debug-view').style.display = target === 'v3-debug' ? '' : 'none';
     document.getElementById('settings-view').style.display = target === 'settings' ? '' : 'none';
@@ -5630,6 +5663,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     if (target === 'plan') loadPlans();
     if (target === 'import') { pollImportStatus(); loadImportResults(); }
     if (target === 'review') loadReviewQueue();
+    if (target === 'journal') loadJournals();
     if (target === 'logs') { loadLogs(); loadOBErrors(); }
     if (target === 'v3-debug') loadV3Debug();
     if (target === 'settings') {
@@ -6666,6 +6700,154 @@ function updateReviewAreaButtons() {
     el.style.boxShadow = area === reviewArea ? 'inset 2px 2px 5px var(--shadow-dark-subtle), inset -2px -2px 5px var(--shadow-light)' : '';
     el.style.color = area === reviewArea ? 'var(--accent)' : '';
   });
+}
+
+var journalType = '';
+var journalItems = [];
+
+function journalTypeLabel(t) {
+  if (t === 'handoff') return '交接';
+  if (t === 'event') return '事件';
+  if (t === 'free') return '自由';
+  return '日记';
+}
+
+function setJournalType(type) {
+  journalType = ['handoff', 'event', 'free'].indexOf(type) >= 0 ? type : '';
+  clearJournalDetail();
+  loadJournals();
+}
+
+function updateJournalButtons() {
+  ['', 'handoff', 'event', 'free'].forEach(function(type) {
+    var id = type || 'all';
+    var el = document.getElementById('journal-tab-' + id);
+    if (!el) return;
+    el.style.boxShadow = type === journalType ? 'inset 2px 2px 5px var(--shadow-dark-subtle), inset -2px -2px 5px var(--shadow-light)' : '';
+    el.style.color = type === journalType ? 'var(--accent)' : '';
+  });
+}
+
+function journalPills(items) {
+  if (!Array.isArray(items) || !items.length) return '—';
+  return items.map(function(t) { return '<code style="font-size:11px;">' + esc(t) + '</code>'; }).join(' ');
+}
+
+function renderJournalCard(item) {
+  var id = item.journal_id || '';
+  var idArg = JSON.stringify(id).replace(/"/g, '&quot;');
+  return (
+    '<div class="review-card">' +
+      '<div class="review-card-inner">' +
+        '<div class="review-card-main">' +
+          '<div class="review-pill-row">' +
+            '<code class="review-id">' + esc(id) + '</code>' +
+            '<span class="review-meta-pill">type: ' + esc(journalTypeLabel(item.entry_type)) + '</span>' +
+            '<span class="review-meta-pill">importance: ' + esc(String(item.importance || '—')) + '</span>' +
+            '<span class="review-meta-pill">' + esc((item.created_at || '').slice(0, 19).replace('T', ' ')) + '</span>' +
+          '</div>' +
+          '<div class="review-card-title">' + esc(item.title || '未命名日记') + '</div>' +
+          '<div class="review-card-grid">' +
+            reviewField('tags', journalPills(item.tags)) +
+            reviewField('domain', journalPills(item.domain)) +
+            reviewField('author', reviewValue(item.author)) +
+            reviewField('status', reviewValue(item.status)) +
+          '</div>' +
+          '<div class="review-card-summary">' + esc(item.summary || '') + '</div>' +
+        '</div>' +
+        '<div class="review-card-actions">' +
+          '<button onclick="loadJournalDetail(' + idArg + ')" title="查看详情" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="eye"></i> 查看详情</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+async function loadJournals() {
+  var list = document.getElementById('journal-list');
+  var meta = document.getElementById('journal-meta');
+  if (!list || !meta) return;
+  updateJournalButtons();
+  meta.textContent = '加载中…';
+  list.innerHTML = '<div class="loading">加载中…</div>';
+  var q = (document.getElementById('journal-query') || {}).value || '';
+  var params = new URLSearchParams({max_results: '100'});
+  if (journalType) params.set('entry_type', journalType);
+  if (q.trim()) params.set('query', q.trim());
+  try {
+    var resp = await authFetch('/api/journals?' + params.toString());
+    if (!resp) return;
+    var data = await readJsonSafe(resp);
+    if (!data.ok) throw new Error(data.error || '读取失败');
+    journalItems = data.journals || [];
+    meta.textContent = '日记：' + journalItems.length + ' 条';
+    if (!journalItems.length) {
+      list.innerHTML = '<div style="padding:28px 18px;text-align:center;color:var(--text-dim);font-size:13px;line-height:1.8;border:1px solid var(--border);border-radius:8px;background:var(--surface);"><div style="font-weight:600;color:var(--text);margin-bottom:4px;">暂无日记。</div><div>journal_write 写入的交接、事件和自由日记会出现在这里。</div></div>';
+      clearJournalDetail();
+      return;
+    }
+    list.innerHTML = journalItems.map(renderJournalCard).join('');
+    if (window.lucide) lucide.createIcons();
+  } catch (e) {
+    meta.textContent = '';
+    list.innerHTML = '<div style="color:var(--negative);font-size:13px;padding:16px;">日记加载失败：' + esc(e.message || e) + '</div>';
+  }
+}
+
+async function loadJournalDetail(id) {
+  var panel = document.getElementById('journal-detail-panel');
+  var detail = document.getElementById('journal-detail');
+  if (!panel || !detail) return;
+  panel.style.display = '';
+  detail.innerHTML = '<div class="loading">加载中…</div>';
+  try {
+    var resp = await authFetch('/api/journal/' + encodeURIComponent(id));
+    if (!resp) return;
+    var data = await readJsonSafe(resp);
+    if (!data.ok) throw new Error(data.error || '读取失败');
+    var j = data.journal || {};
+    var fm = j.frontmatter || {};
+    var metaRows =
+      reviewField('journal_id', reviewValue(j.journal_id)) +
+      reviewField('entry_type', reviewValue(j.entry_type)) +
+      reviewField('created_at', reviewValue(j.created_at)) +
+      reviewField('updated_at', reviewValue(j.updated_at)) +
+      reviewField('author', reviewValue(j.author)) +
+      reviewField('source', reviewValue(j.source)) +
+      reviewField('tags', journalPills(j.tags)) +
+      reviewField('domain', journalPills(j.domain)) +
+      reviewField('related_buckets', reviewValue(j.related_buckets)) +
+      reviewField('related_journals', reviewValue(j.related_journals)) +
+      reviewField('importance', reviewValue(j.importance)) +
+      reviewField('mood', reviewValue(j.mood)) +
+      reviewField('status', reviewValue(j.status)) +
+      reviewField('path', reviewValue(j.path));
+    detail.innerHTML =
+      '<div class="review-detail-shell">' +
+        '<section class="review-detail-section">' +
+          '<h4>' + esc(j.title || '未命名日记') + '</h4>' +
+          '<div class="review-card-grid">' + metaRows + '</div>' +
+        '</section>' +
+        '<section class="review-detail-section">' +
+          '<h4>完整正文</h4>' +
+          '<div class="review-content-box">' + esc(j.content || '') + '</div>' +
+        '</section>' +
+        '<details class="review-raw-details">' +
+          '<summary>显示原始字段</summary>' +
+          '<pre>' + esc(JSON.stringify(fm, null, 2)) + '</pre>' +
+        '</details>' +
+      '</div>';
+    if (window.lucide) lucide.createIcons();
+  } catch (e) {
+    detail.innerHTML = '<div style="color:var(--negative);font-size:13px;padding:16px;">日记详情加载失败：' + esc(e.message || e) + '</div>';
+  }
+}
+
+function clearJournalDetail() {
+  var panel = document.getElementById('journal-detail-panel');
+  var detail = document.getElementById('journal-detail');
+  if (panel) panel.style.display = 'none';
+  if (detail) detail.innerHTML = '';
 }
 
 async function loadReviewQueue() {
