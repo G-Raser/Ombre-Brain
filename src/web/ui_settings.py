@@ -22,6 +22,7 @@ ALLOWED_TOP_FIELDS = {
     "theme",
     "show_mascot",
     "themes",
+    "identity",
 }
 ALLOWED_THEME_FIELDS = {
     "background_enabled",
@@ -44,8 +45,15 @@ DEFAULT_THEME_SETTINGS: dict[str, Any] = {
 DEFAULT_UI_SETTINGS: dict[str, Any] = {
     "theme": "umi-purple",
     "show_mascot": False,
+    "identity": {
+        "name_mode": "umi-planet",
+        "icon_mode": "umi-a",
+    },
     "themes": {},
 }
+
+ALLOWED_NAME_MODES = {"original", "umi-planet"}
+ALLOWED_ICON_MODES = {"original", "umi-a", "umi-b"}
 
 
 def _buckets_dir() -> Path:
@@ -95,10 +103,23 @@ def _normalize_theme_settings(raw: Any) -> dict[str, Any]:
     return data
 
 
+def _normalize_identity(raw: Any) -> dict[str, str]:
+    default = dict(DEFAULT_UI_SETTINGS["identity"])
+    if not isinstance(raw, dict):
+        return default
+    name_mode = raw.get("name_mode")
+    icon_mode = raw.get("icon_mode")
+    return {
+        "name_mode": name_mode if name_mode in ALLOWED_NAME_MODES else default["name_mode"],
+        "icon_mode": icon_mode if icon_mode in ALLOWED_ICON_MODES else default["icon_mode"],
+    }
+
+
 def _normalize_settings(raw: Any) -> dict[str, Any]:
     data = {
         "theme": DEFAULT_UI_SETTINGS["theme"],
         "show_mascot": DEFAULT_UI_SETTINGS["show_mascot"],
+        "identity": dict(DEFAULT_UI_SETTINGS["identity"]),
         "themes": _default_themes(),
     }
     if isinstance(raw, dict):
@@ -107,6 +128,7 @@ def _normalize_settings(raw: Any) -> dict[str, Any]:
     if data.get("theme") not in ALLOWED_THEMES:
         data["theme"] = DEFAULT_UI_SETTINGS["theme"]
     data["show_mascot"] = bool(data.get("show_mascot"))
+    data["identity"] = _normalize_identity(data.get("identity"))
 
     themes = _default_themes()
     raw_themes = data.get("themes")
@@ -220,6 +242,8 @@ def register(mcp) -> None:
             next_settings["theme"] = body["theme"] if body["theme"] in ALLOWED_THEMES else next_settings["theme"]
         if "show_mascot" in body:
             next_settings["show_mascot"] = bool(body.get("show_mascot"))
+        if "identity" in body:
+            next_settings["identity"] = _normalize_identity(body.get("identity"))
 
         theme_patch = {k: body[k] for k in ALLOWED_THEME_FIELDS if k in body}
         if theme_patch:

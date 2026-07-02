@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ombre Brain</title>
 <meta name="theme-color" content="#B85C3C">
-<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-<link rel="apple-touch-icon" href="/static/icon.svg">
+<link id="dashboard-favicon" rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link id="dashboard-apple-icon" rel="apple-touch-icon" href="/static/icon.svg">
 <link rel="manifest" href="/static/manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;500;600&family=Noto+Sans+SC:wght@400;500&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
@@ -21,6 +21,31 @@
       'cattea-gold-black': '#080808',
       'cc-gold-brown': '#17100C'
     };
+    var IDENTITY_NAMES = {
+      'original': 'Ombre Brain',
+      'umi-planet': 'Umi Planet'
+    };
+    var IDENTITY_ICONS = {
+      'original': {
+        header: '/static/icon.svg',
+        favicon: '/static/favicon.svg',
+        type: 'image/svg+xml'
+      },
+      'umi-a': {
+        header: '/static/branding/umi-planet-a.png',
+        favicon: '/static/branding/umi-planet-a.png',
+        type: 'image/png'
+      },
+      'umi-b': {
+        header: '/static/branding/umi-planet-b.png',
+        favicon: '/static/branding/umi-planet-b.png',
+        type: 'image/png'
+      }
+    };
+    var DEFAULT_IDENTITY = {
+      name_mode: 'umi-planet',
+      icon_mode: 'umi-a'
+    };
     var DEFAULT_THEME_SETTINGS = {
       background_enabled: false,
       background_url: null,
@@ -33,6 +58,7 @@
     var DEFAULT_UI_SETTINGS = {
       theme: DEFAULT_THEME,
       show_mascot: false,
+      identity: Object.assign({}, DEFAULT_IDENTITY),
       themes: {}
     };
     function normalizeTheme(value) {
@@ -57,15 +83,23 @@
       if (['center center', 'top center', 'bottom center'].indexOf(t.background_position) < 0) t.background_position = 'center center';
       return t;
     }
+    function normalizeIdentity(raw) {
+      raw = raw || {};
+      var nameMode = Object.prototype.hasOwnProperty.call(IDENTITY_NAMES, raw.name_mode) ? raw.name_mode : DEFAULT_IDENTITY.name_mode;
+      var iconMode = Object.prototype.hasOwnProperty.call(IDENTITY_ICONS, raw.icon_mode) ? raw.icon_mode : DEFAULT_IDENTITY.icon_mode;
+      return {name_mode: nameMode, icon_mode: iconMode};
+    }
     function normalizeUiSettings(raw) {
       raw = raw || {};
       var s = Object.assign({}, DEFAULT_UI_SETTINGS, {
         theme: raw.theme,
         show_mascot: raw.show_mascot,
+        identity: normalizeIdentity(raw.identity),
         themes: defaultThemeSettingsMap()
       });
       s.theme = normalizeTheme(s.theme);
       s.show_mascot = !!s.show_mascot;
+      s.identity = normalizeIdentity(s.identity);
       if (raw.themes && typeof raw.themes === 'object') {
         Object.keys(THEMES).forEach(function(theme) {
           s.themes[theme] = normalizeThemeSettings(raw.themes[theme]);
@@ -86,6 +120,7 @@
       patch = patch || {};
       if (patch.theme) next.theme = normalizeTheme(patch.theme);
       if (Object.prototype.hasOwnProperty.call(patch, 'show_mascot')) next.show_mascot = !!patch.show_mascot;
+      if (Object.prototype.hasOwnProperty.call(patch, 'identity')) next.identity = normalizeIdentity(patch.identity);
       if (patch.themes && typeof patch.themes === 'object') {
         Object.keys(THEMES).forEach(function(theme) {
           if (patch.themes[theme]) next.themes[theme] = normalizeThemeSettings(Object.assign({}, next.themes[theme], patch.themes[theme]));
@@ -105,6 +140,38 @@
       return normalizeUiSettings(next);
     }
     window.uiSettingsWithPatch = uiSettingsWithPatch;
+    function applyDashboardIdentity(settings) {
+      var identity = normalizeIdentity(settings && settings.identity);
+      var titleText = IDENTITY_NAMES[identity.name_mode] || IDENTITY_NAMES[DEFAULT_IDENTITY.name_mode];
+      var icon = IDENTITY_ICONS[identity.icon_mode] || IDENTITY_ICONS[DEFAULT_IDENTITY.icon_mode];
+      document.title = titleText;
+      var headerTitle = document.getElementById('dashboard-title-text');
+      if (headerTitle) headerTitle.textContent = titleText;
+      var logo = document.getElementById('dashboard-logo');
+      if (logo) {
+        logo.src = icon.header;
+        logo.alt = titleText;
+      }
+      var favicon = document.getElementById('dashboard-favicon');
+      if (favicon) {
+        favicon.href = icon.favicon;
+        favicon.type = icon.type || 'image/png';
+      }
+      var appleIcon = document.getElementById('dashboard-apple-icon');
+      if (appleIcon) appleIcon.href = icon.header;
+      var previewLogo = document.getElementById('identity-preview-logo');
+      if (previewLogo) {
+        previewLogo.src = icon.header;
+        previewLogo.alt = titleText;
+      }
+      var previewName = document.getElementById('identity-preview-name');
+      if (previewName) previewName.textContent = titleText;
+      var nameSelect = document.getElementById('identity-name-mode');
+      if (nameSelect) nameSelect.value = identity.name_mode;
+      var iconSelect = document.getElementById('identity-icon-mode');
+      if (iconSelect) iconSelect.value = identity.icon_mode;
+    }
+    window.applyDashboardIdentity = applyDashboardIdentity;
     function getDashboardThemeLabel(theme) {
       var label = {
         'ombre-original': 'Ombre Original',
@@ -143,6 +210,7 @@
       document.documentElement.style.setProperty('--custom-panel-opacity', String(settings.panel_opacity));
       var meta = document.querySelector('meta[name="theme-color"]');
       if (meta) meta.setAttribute('content', THEMES[settings.theme]);
+      applyDashboardIdentity(settings);
       updateThemePickerLabel(settings.theme);
       if (window.syncUiSettingsControls) window.syncUiSettingsControls(settings);
       try {
@@ -819,7 +887,7 @@
     stroke-width: 1.6;
   }
   .icon-btn { display: inline-flex; align-items: center; gap: 5px; padding: 7px 12px !important; font-size: 12px !important; white-space: nowrap; }
-  .header h1 .ob-logo { display: inline-block; vertical-align: -4px; width: 22px; height: 22px; margin-right: 6px; }
+  .header h1 .ob-logo { display: inline-block; vertical-align: -8px; width: 30px; height: 30px; margin-right: 7px; object-fit: contain; }
   .header .version-badge {
     font-family: 'Cormorant Garamond', serif;
     font-size: 11px;
@@ -3619,8 +3687,8 @@
 
 <div class="header">
   <h1>
-    <img class="ob-logo" src="/static/icon.svg" alt="OB" />
-    Ombre Brain<span class="version-badge" id="version-badge"></span>
+    <img class="ob-logo" id="dashboard-logo" src="/static/icon.svg" alt="Ombre Brain" />
+    <span id="dashboard-title-text">Ombre Brain</span><span class="version-badge" id="version-badge"></span>
   </h1>
   <div class="header-meta">
     <span class="stats" id="stats">loading...</span>
@@ -4209,6 +4277,39 @@
           <input type="text" id="settings-human-from" placeholder="用户" maxlength="20" style="width:120px;" />
           <button onclick="syncExistingHuman()" title="替换旧记忆" style="font-size:12px;padding:0 12px;height:32px;display:inline-flex;align-items:center;gap:5px;"><i data-lucide="replace"></i> 替换旧记忆</button>
           <span id="settings-human-sync-msg" style="font-size:12px;color:var(--text-dim);"></span>
+        </div>
+      </div>
+
+      <div style="margin-bottom:18px;">
+        <div style="font-weight:600;font-size:13px;margin-bottom:6px;">Identity / 名字与图标</div>
+        <div class="ui-settings-grid">
+          <div class="ui-settings-card">
+            <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+              <img id="identity-preview-logo" src="/static/icon.svg" alt="Ombre Brain" style="width:40px;height:40px;object-fit:contain;flex:0 0 auto;" />
+              <div style="min-width:0;">
+                <div id="identity-preview-name" style="font-weight:650;font-size:15px;color:var(--text);line-height:1.25;">Ombre Brain</div>
+                <div style="font-size:12px;color:var(--text-muted);line-height:1.5;">document title / header / favicon</div>
+              </div>
+            </div>
+            <div id="identity-settings-status" style="font-size:12px;color:var(--text-dim);margin-top:8px;min-height:18px;"></div>
+          </div>
+          <div class="ui-settings-card">
+            <div class="config-row" style="margin:0 0 10px;">
+              <label>显示名字</label>
+              <select id="identity-name-mode" onchange="saveIdentitySettingsFromControls()">
+                <option value="original">Ombre Brain</option>
+                <option value="umi-planet">Umi Planet</option>
+              </select>
+            </div>
+            <div class="config-row" style="margin:0;">
+              <label>图标</label>
+              <select id="identity-icon-mode" onchange="saveIdentitySettingsFromControls()">
+                <option value="original">原版</option>
+                <option value="umi-a">Umi Planet A</option>
+                <option value="umi-b">Umi Planet B</option>
+              </select>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -5842,6 +5943,27 @@ function initThemeDropdown() {
   });
 }
 initThemeDropdown();
+
+function collectIdentitySettingsFromControls() {
+  var nameMode = document.getElementById('identity-name-mode');
+  var iconMode = document.getElementById('identity-icon-mode');
+  var current = (window.OMBRE_UI_SETTINGS && window.OMBRE_UI_SETTINGS.identity) || {};
+  return {
+    name_mode: nameMode ? nameMode.value : (current.name_mode || 'umi-planet'),
+    icon_mode: iconMode ? iconMode.value : (current.icon_mode || 'umi-a')
+  };
+}
+async function saveIdentitySettingsFromControls() {
+  var msg = document.getElementById('identity-settings-status');
+  var identity = collectIdentitySettingsFromControls();
+  if (msg) { msg.textContent = '保存中...'; msg.style.color = 'var(--text-dim)'; }
+  try {
+    await window.saveDashboardUiSettings({identity: identity});
+    if (msg) { msg.textContent = '已保存名字与图标'; msg.style.color = 'var(--positive)'; }
+  } catch (e) {
+    if (msg) { msg.textContent = '保存失败：' + (e.message || e); msg.style.color = 'var(--negative)'; }
+  }
+}
 
 function updateUiRangeLabels() {
   var dim = document.getElementById('ui-bg-dim');
