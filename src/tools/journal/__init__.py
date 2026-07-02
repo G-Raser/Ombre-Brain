@@ -154,6 +154,13 @@ def _read_post(path: Path) -> dict[str, Any]:
     return {"metadata": meta, "content": content or "", "path": str(path)}
 
 
+def _relative_path(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(journal_root().resolve()).as_posix()
+    except ValueError:
+        return path.name
+
+
 def _safe_journal_files() -> list[Path]:
     root = journal_root()
     if not root.exists():
@@ -169,6 +176,48 @@ def _safe_journal_files() -> list[Path]:
         except OSError:
             continue
     return files
+
+
+def find_journal_file(identifier: str) -> Optional[Path]:
+    raw = str(identifier or "").strip()
+    if not raw:
+        return None
+    root = journal_root().resolve()
+
+    # 1) Relative path or absolute file path, constrained to buckets/journals.
+    candidate: Optional[Path] = None
+    try:
+        raw_path = Path(raw)
+        if raw_path.is_absolute():
+            candidate = raw_path.resolve()
+        elif "/" in raw or "\\" in raw:
+            candidate = (root / raw.replace("\\", "/")).resolve()
+        if candidate and candidate.suffix == ".md" and candidate.exists() and candidate.is_file():
+            if candidate == root or root not in candidate.parents:
+                return None
+            trash = (root / "_trash").resolve()
+            if trash == candidate or trash in candidate.parents:
+                return None
+            return candidate
+    except OSError:
+        return None
+
+    # 2) journal_id from frontmatter.
+    if JOURNAL_ID_RE.match(raw):
+        for path in _safe_journal_files():
+            try:
+                entry = _read_post(path)
+            except Exception:
+                continue
+            if entry["metadata"].get("journal_id") == raw:
+                return path
+
+    # 3) file_name fallback.
+    if raw.endswith(".md") and "/" not in raw and "\\" not in raw:
+        for path in _safe_journal_files():
+            if path.name == raw:
+                return path
+    return None
 
 
 def _summary(content: str, limit: int = 180) -> str:
@@ -196,6 +245,9 @@ def _entry_to_result(entry: dict[str, Any], include_full: bool = False) -> dict[
         "status": meta.get("status", "active"),
         "summary": _summary(content),
         "path": entry["path"],
+        "file_path": entry["path"],
+        "relative_path": _relative_path(Path(entry["path"])),
+        "detail_key": _relative_path(Path(entry["path"])),
         "file_name": meta.get("file_name", ""),
     }
     if include_full:
@@ -331,6 +383,14 @@ async def journal_read(
 async def journal_read_json(**kwargs: Any) -> str:
     items = await journal_read(**kwargs)
     return json.dumps({"ok": True, "journals": items, "total": len(items)}, ensure_ascii=False, indent=2)
+
+
+async def journal_detail(identifier: str) -> Optional[dict[str, Any]]:
+    path = find_journal_file(identifier)
+    if not path:
+        return None
+    entry = _read_post(path)
+    return _entry_to_result(entry, include_full=True)
 
 
 async def move_journal_to_trash(journal_id: str) -> Optional[str]:

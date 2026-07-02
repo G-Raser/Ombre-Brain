@@ -389,6 +389,8 @@
   html {
     min-height: 100%;
     background: var(--bg);
+    scrollbar-gutter: stable;
+    overflow-x: hidden;
   }
 
   body {
@@ -403,6 +405,8 @@
     -webkit-font-smoothing: antialiased;
     position: relative;
     isolation: isolate;
+    overflow-x: hidden;
+    overflow-y: scroll;
   }
 
   body::before,
@@ -699,7 +703,7 @@
   .tab.active {
     color: var(--accent);
     border-bottom-color: var(--accent);
-    font-weight: 500;
+    font-weight: 400;
   }
   .tab.active .tab-en { color: var(--accent-light); }
   .tab-spacer { flex: 1; pointer-events: none; }
@@ -2418,6 +2422,131 @@
     padding-top: 12px;
   }
 
+  .journal-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0 4px;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+  .journal-tag-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0;
+  }
+  .journal-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 2px 7px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-solid);
+    color: var(--text-dim);
+    font-size: 11px;
+    line-height: 1.35;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .journal-detail-shell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
+  }
+  .journal-entry {
+    width: min(100%, 860px);
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+  }
+  .journal-title {
+    margin: 0 0 8px;
+    color: var(--text);
+    font-size: 24px;
+    line-height: 1.3;
+    font-family: var(--font-display);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .journal-kicker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    color: var(--text-dim);
+    font-size: 12px;
+    line-height: 1.5;
+    margin-bottom: 8px;
+  }
+  .journal-body {
+    margin-top: 18px;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.86;
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+  .journal-body p {
+    margin: 0 0 1em;
+  }
+  .journal-body h2,
+  .journal-body h3,
+  .journal-body h4 {
+    margin: 1.15em 0 0.55em;
+    color: var(--text);
+    line-height: 1.35;
+    font-weight: 650;
+  }
+  .journal-body h2 { font-size: 18px; }
+  .journal-body h3 { font-size: 16px; }
+  .journal-body h4 { font-size: 15px; }
+  .journal-body ul {
+    margin: 0 0 1em 1.25em;
+    padding: 0;
+  }
+  .journal-body li {
+    margin: 0.22em 0;
+    padding-left: 0.1em;
+  }
+  .journal-body blockquote {
+    margin: 0 0 1em;
+    padding: 8px 12px;
+    border-left: 3px solid var(--accent);
+    background: var(--surface-solid);
+    color: var(--text-dim);
+  }
+  .journal-metadata-details {
+    width: min(100%, 860px);
+    box-sizing: border-box;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: var(--surface-solid);
+  }
+  .journal-metadata-details summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-size: 12px;
+    user-select: none;
+  }
+  .journal-metadata-grid {
+    margin-top: 10px;
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    gap: 7px 10px;
+    font-size: 12px;
+    line-height: 1.65;
+  }
+  .journal-metadata-grid .review-detail-field {
+    display: contents;
+  }
+
   @media (max-width: 768px) {
     html, body {
       overflow-x: hidden;
@@ -2657,6 +2786,55 @@
       font-size: 13px;
       line-height: 1.65;
       overflow-wrap: break-word;
+    }
+    #journal-view .config-section {
+      padding: 14px 12px;
+    }
+    #journal-detail-panel {
+      width: calc(100vw - 24px);
+      max-width: calc(100vw - 24px);
+      margin-left: auto;
+      margin-right: auto;
+      box-sizing: border-box;
+      overflow: visible;
+    }
+    .journal-entry {
+      width: 100%;
+      padding: 15px 13px;
+      border-radius: 7px;
+    }
+    .journal-title {
+      font-size: 21px;
+      line-height: 1.35;
+    }
+    .journal-kicker {
+      gap: 6px;
+      font-size: 11px;
+    }
+    .journal-body {
+      font-size: 15px;
+      line-height: 1.82;
+      margin-top: 14px;
+    }
+    .journal-metadata-details {
+      width: 100%;
+      border-radius: 7px;
+    }
+    .journal-metadata-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .journal-metadata-grid .review-detail-field {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .journal-chip {
+      max-width: 100%;
+      overflow-wrap: anywhere;
     }
     .review-detail-section h4 {
       font-size: 15px;
@@ -3028,6 +3206,8 @@
   html[data-theme="umi-purple"] .review-card,
   html[data-theme="umi-purple"] .review-detail-shell,
   html[data-theme="umi-purple"] .review-raw-details,
+  html[data-theme="umi-purple"] .journal-entry,
+  html[data-theme="umi-purple"] .journal-metadata-details,
   html[data-theme="umi-purple"] .detail-panel {
     background: linear-gradient(180deg, rgba(24, 20, 34, 0.76), rgba(18, 15, 27, 0.84)) !important;
     border-color: var(--border) !important;
@@ -3037,6 +3217,8 @@
   html[data-theme="umi-purple"] .config-section,
   html[data-theme="umi-purple"] .detail-panel,
   html[data-theme="umi-purple"] .review-detail-shell,
+  html[data-theme="umi-purple"] .journal-entry,
+  html[data-theme="umi-purple"] .journal-metadata-details,
   html[data-theme="umi-purple"] .self-panel {
     border-radius: 8px !important;
   }
@@ -3047,6 +3229,7 @@
   html[data-theme="umi-purple"] .self-entry,
   html[data-theme="umi-purple"] .review-card,
   html[data-theme="umi-purple"] .review-raw-details,
+  html[data-theme="umi-purple"] .journal-chip,
   html[data-theme="umi-purple"] .detail-content,
   html[data-theme="umi-purple"] .review-body-pre {
     border-radius: 6px !important;
@@ -6733,30 +6916,93 @@ function journalPills(items) {
   return items.map(function(t) { return '<code style="font-size:11px;">' + esc(t) + '</code>'; }).join(' ');
 }
 
+function journalChips(items, prefix) {
+  if (!Array.isArray(items) || !items.length) return '';
+  return items.map(function(t) {
+    return '<span class="journal-chip">' + esc((prefix || '') + t) + '</span>';
+  }).join('');
+}
+
+function journalMarkdown(content) {
+  var lines = String(content || '').replace(/\r\n/g, '\n').split('\n');
+  var html = '';
+  var paragraph = [];
+  var inList = false;
+  function flushParagraph() {
+    if (!paragraph.length) return;
+    html += '<p>' + esc(paragraph.join(' ')) + '</p>';
+    paragraph = [];
+  }
+  function closeList() {
+    if (!inList) return;
+    html += '</ul>';
+    inList = false;
+  }
+  lines.forEach(function(line) {
+    var raw = line || '';
+    var trimmed = raw.trim();
+    if (!trimmed) {
+      flushParagraph();
+      closeList();
+      return;
+    }
+    var heading = trimmed.match(/^(#{1,4})\s+(.+)$/);
+    if (heading) {
+      flushParagraph();
+      closeList();
+      var level = Math.min(4, Math.max(2, heading[1].length + 1));
+      html += '<h' + level + '>' + esc(heading[2]) + '</h' + level + '>';
+      return;
+    }
+    var bullet = trimmed.match(/^[-*]\s+(.*)$/);
+    if (bullet) {
+      flushParagraph();
+      if (!inList) {
+        html += '<ul>';
+        inList = true;
+      }
+      html += '<li>' + esc(bullet[1]) + '</li>';
+      return;
+    }
+    var quote = trimmed.match(/^>\s?(.*)$/);
+    if (quote) {
+      flushParagraph();
+      closeList();
+      html += '<blockquote>' + esc(quote[1]) + '</blockquote>';
+      return;
+    }
+    closeList();
+    paragraph.push(trimmed);
+  });
+  flushParagraph();
+  closeList();
+  return html || '<p style="color:var(--text-dim);">（空白日记）</p>';
+}
+
 function renderJournalCard(item) {
   var id = item.journal_id || '';
-  var idArg = JSON.stringify(id).replace(/"/g, '&quot;');
+  var detailKey = item.detail_key || item.relative_path || item.file_path || item.path || item.file_name || id;
+  var keyArg = JSON.stringify(detailKey).replace(/"/g, '&quot;');
+  var chipHtml = journalChips(item.tags, '#') + journalChips(item.domain, '· ');
   return (
     '<div class="review-card">' +
       '<div class="review-card-inner">' +
         '<div class="review-card-main">' +
           '<div class="review-pill-row">' +
-            '<code class="review-id">' + esc(id) + '</code>' +
             '<span class="review-meta-pill">type: ' + esc(journalTypeLabel(item.entry_type)) + '</span>' +
             '<span class="review-meta-pill">importance: ' + esc(String(item.importance || '—')) + '</span>' +
             '<span class="review-meta-pill">' + esc((item.created_at || '').slice(0, 19).replace('T', ' ')) + '</span>' +
           '</div>' +
           '<div class="review-card-title">' + esc(item.title || '未命名日记') + '</div>' +
-          '<div class="review-card-grid">' +
-            reviewField('tags', journalPills(item.tags)) +
-            reviewField('domain', journalPills(item.domain)) +
-            reviewField('author', reviewValue(item.author)) +
-            reviewField('status', reviewValue(item.status)) +
+          '<div class="journal-card-meta">' +
+            '<span>' + esc(item.author || 'agent') + '</span>' +
+            '<span>status: ' + esc(item.status || 'active') + '</span>' +
           '</div>' +
+          (chipHtml ? '<div class="journal-tag-row">' + chipHtml + '</div>' : '') +
           '<div class="review-card-summary">' + esc(item.summary || '') + '</div>' +
         '</div>' +
         '<div class="review-card-actions">' +
-          '<button onclick="loadJournalDetail(' + idArg + ')" title="查看详情" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="eye"></i> 查看详情</button>' +
+          '<button onclick="loadJournalDetail(' + keyArg + ')" title="查看详情" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="eye"></i> 查看详情</button>' +
         '</div>' +
       '</div>' +
     '</div>'
@@ -6794,19 +7040,20 @@ async function loadJournals() {
   }
 }
 
-async function loadJournalDetail(id) {
+async function loadJournalDetail(detailKey) {
   var panel = document.getElementById('journal-detail-panel');
   var detail = document.getElementById('journal-detail');
   if (!panel || !detail) return;
   panel.style.display = '';
   detail.innerHTML = '<div class="loading">加载中…</div>';
   try {
-    var resp = await authFetch('/api/journal/' + encodeURIComponent(id));
+    var resp = await authFetch('/api/journal-detail?key=' + encodeURIComponent(detailKey));
     if (!resp) return;
     var data = await readJsonSafe(resp);
     if (!data.ok) throw new Error(data.error || '读取失败');
     var j = data.journal || {};
     var fm = j.frontmatter || {};
+    var chipHtml = journalChips(j.tags, '#') + journalChips(j.domain, '· ');
     var metaRows =
       reviewField('journal_id', reviewValue(j.journal_id)) +
       reviewField('entry_type', reviewValue(j.entry_type)) +
@@ -6823,18 +7070,25 @@ async function loadJournalDetail(id) {
       reviewField('status', reviewValue(j.status)) +
       reviewField('path', reviewValue(j.path));
     detail.innerHTML =
-      '<div class="review-detail-shell">' +
-        '<section class="review-detail-section">' +
-          '<h4>' + esc(j.title || '未命名日记') + '</h4>' +
-          '<div class="review-card-grid">' + metaRows + '</div>' +
-        '</section>' +
-        '<section class="review-detail-section">' +
-          '<h4>完整正文</h4>' +
-          '<div class="review-content-box">' + esc(j.content || '') + '</div>' +
-        '</section>' +
-        '<details class="review-raw-details">' +
-          '<summary>显示原始字段</summary>' +
-          '<pre>' + esc(JSON.stringify(fm, null, 2)) + '</pre>' +
+      '<div class="journal-detail-shell">' +
+        '<article class="journal-entry">' +
+          '<h2 class="journal-title">' + esc(j.title || '未命名日记') + '</h2>' +
+          '<div class="journal-kicker">' +
+            '<span>' + esc(journalTypeLabel(j.entry_type)) + '</span>' +
+            '<span>' + esc((j.created_at || '').slice(0, 19).replace('T', ' ')) + '</span>' +
+            '<span>importance ' + esc(String(j.importance || '—')) + '</span>' +
+            '<span>' + esc(j.author || 'agent') + '</span>' +
+          '</div>' +
+          (chipHtml ? '<div class="journal-tag-row">' + chipHtml + '</div>' : '') +
+          '<div class="journal-body">' + journalMarkdown(j.content || '') + '</div>' +
+        '</article>' +
+        '<details class="journal-metadata-details">' +
+          '<summary>元数据 / Metadata</summary>' +
+          '<div class="journal-metadata-grid">' + metaRows + '</div>' +
+          '<details class="review-raw-details" style="margin-top:12px;">' +
+            '<summary>原始字段 / Raw fields</summary>' +
+            '<pre>' + esc(JSON.stringify(fm, null, 2)) + '</pre>' +
+          '</details>' +
         '</details>' +
       '</div>';
     if (window.lucide) lucide.createIcons();

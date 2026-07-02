@@ -38,6 +38,20 @@ def register(mcp) -> None:
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
+    @mcp.custom_route("/api/journal-detail", methods=["GET"])
+    async def api_journal_detail_by_key(request: Request) -> Response:
+        err = sh._require_auth(request)
+        if err:
+            return err
+        detail_key = request.query_params.get("key", "")
+        try:
+            item = await journal_tools.journal_detail(detail_key)
+            if item:
+                return JSONResponse({"ok": True, "journal": item})
+            return JSONResponse({"ok": False, "error": "journal not found"}, status_code=404)
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
     @mcp.custom_route("/api/journal/{journal_id}", methods=["GET"])
     async def api_journal_detail(request: Request) -> Response:
         err = sh._require_auth(request)
@@ -45,14 +59,9 @@ def register(mcp) -> None:
             return err
         journal_id = request.path_params.get("journal_id", "")
         try:
-            items = await journal_tools.journal_read(
-                query=journal_id,
-                max_results=10,
-                include_full=True,
-            )
-            for item in items:
-                if item.get("journal_id") == journal_id:
-                    return JSONResponse({"ok": True, "journal": item})
+            item = await journal_tools.journal_detail(journal_id)
+            if item:
+                return JSONResponse({"ok": True, "journal": item})
             return JSONResponse({"ok": False, "error": "journal not found"}, status_code=404)
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
