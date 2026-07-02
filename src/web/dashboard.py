@@ -80,6 +80,23 @@ def register(mcp) -> None:
         except FileNotFoundError:
             return JSONResponse({"error": "not found"}, status_code=404)
 
+    @mcp.custom_route("/static/branding/{name}", methods=["GET"])
+    async def static_branding_asset(request: Request) -> Response:
+        from starlette.responses import Response as _Resp, JSONResponse
+        name = request.path_params.get("name", "")
+        allowed = {
+            "umi-planet-a.png": "image/png",
+            "umi-planet-b.png": "image/png",
+        }
+        if name not in allowed:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        path = os.path.join(sh.repo_root, "static", "branding", name)
+        try:
+            with open(path, "rb") as f:
+                return _Resp(f.read(), media_type=allowed[name])
+        except FileNotFoundError:
+            return JSONResponse({"error": "not found"}, status_code=404)
+
     # 浏览器打开任意页都会自动请求 /favicon.ico，301 永久重定向到 SVG 版本。
     @mcp.custom_route("/favicon.ico", methods=["GET"])
     async def favicon_redirect(request: Request) -> Response:

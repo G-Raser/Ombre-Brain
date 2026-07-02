@@ -46,14 +46,22 @@ DEFAULT_UI_SETTINGS: dict[str, Any] = {
     "theme": "umi-purple",
     "show_mascot": False,
     "identity": {
+        "name_behavior": "follow-theme",
         "name_mode": "umi-planet",
         "icon_mode": "umi-a",
     },
     "themes": {},
 }
 
-ALLOWED_NAME_MODES = {"original", "umi-planet"}
+ALLOWED_NAME_MODES = {"original", "umi-planet", "cattea-core", "shrimp-shell"}
 ALLOWED_ICON_MODES = {"original", "umi-a", "umi-b"}
+ALLOWED_NAME_BEHAVIORS = {"manual", "follow-theme"}
+THEME_NAME_DEFAULTS = {
+    "ombre-original": "original",
+    "umi-purple": "umi-planet",
+    "cattea-gold-black": "cattea-core",
+    "cc-gold-brown": "shrimp-shell",
+}
 
 
 def _buckets_dir() -> Path:
@@ -103,16 +111,21 @@ def _normalize_theme_settings(raw: Any) -> dict[str, Any]:
     return data
 
 
-def _normalize_identity(raw: Any) -> dict[str, str]:
+def _normalize_identity(raw: Any, theme: str | None = None) -> dict[str, str]:
     default = dict(DEFAULT_UI_SETTINGS["identity"])
     if not isinstance(raw, dict):
-        return default
+        raw = {}
+    behavior = raw.get("name_behavior") or raw.get("mode")
     name_mode = raw.get("name_mode")
     icon_mode = raw.get("icon_mode")
-    return {
+    data = {
+        "name_behavior": behavior if behavior in ALLOWED_NAME_BEHAVIORS else default["name_behavior"],
         "name_mode": name_mode if name_mode in ALLOWED_NAME_MODES else default["name_mode"],
         "icon_mode": icon_mode if icon_mode in ALLOWED_ICON_MODES else default["icon_mode"],
     }
+    if data["name_behavior"] == "follow-theme" and theme in THEME_NAME_DEFAULTS:
+        data["name_mode"] = THEME_NAME_DEFAULTS[theme]
+    return data
 
 
 def _normalize_settings(raw: Any) -> dict[str, Any]:
@@ -128,7 +141,7 @@ def _normalize_settings(raw: Any) -> dict[str, Any]:
     if data.get("theme") not in ALLOWED_THEMES:
         data["theme"] = DEFAULT_UI_SETTINGS["theme"]
     data["show_mascot"] = bool(data.get("show_mascot"))
-    data["identity"] = _normalize_identity(data.get("identity"))
+    data["identity"] = _normalize_identity(data.get("identity"), data["theme"])
 
     themes = _default_themes()
     raw_themes = data.get("themes")
@@ -243,7 +256,11 @@ def register(mcp) -> None:
         if "show_mascot" in body:
             next_settings["show_mascot"] = bool(body.get("show_mascot"))
         if "identity" in body:
-            next_settings["identity"] = _normalize_identity(body.get("identity"))
+            patch_identity = body.get("identity") if isinstance(body.get("identity"), dict) else {}
+            next_settings["identity"] = _normalize_identity(
+                {**next_settings.get("identity", {}), **patch_identity},
+                next_settings["theme"],
+            )
 
         theme_patch = {k: body[k] for k in ALLOWED_THEME_FIELDS if k in body}
         if theme_patch:
