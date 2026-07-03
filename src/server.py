@@ -34,7 +34,7 @@ import hmac
 import secrets
 import time
 import json as _json_lib
-from typing import Optional, Awaitable
+from typing import Optional, Awaitable, Any
 from starlette.requests import Request
 from starlette.responses import Response
 import httpx
@@ -820,12 +820,105 @@ async def update_pending_memory(
 
 
 @mcp_extra.tool()
+async def review_candidate_update(
+    candidate_id: str,
+    overrides: Optional[dict] = None,
+    overrides_json: Optional[Any] = None,
+    title: Optional[str] = None,
+    content: Optional[str] = None,
+    tags: Optional[Any] = None,
+    domain: Optional[Any] = None,
+    importance: Optional[int] = None,
+    pinned: Optional[bool] = None,
+    feel: Optional[bool] = None,
+    valence: Optional[float] = None,
+    arousal: Optional[float] = None,
+    why_remembered: Optional[str] = None,
+    notes: Optional[str] = None,
+    updated_by: Optional[str] = "owner",
+    update_note: Optional[str] = "",
+) -> str:
+    """编辑 pending Review candidate。只写 review_overrides / edit_history，不覆盖原始 source/raw 参数。"""
+    async def _run() -> str:
+        flat_fields = {
+            "title": title,
+            "content": content,
+            "tags": tags,
+            "domain": domain,
+            "importance": importance,
+            "pinned": pinned,
+            "feel": feel,
+            "valence": valence,
+            "arousal": arousal,
+            "why_remembered": why_remembered,
+            "notes": notes,
+        }
+        parsed_overrides = _t_review_gate.coerce_review_overrides(
+            overrides=overrides,
+            overrides_json=overrides_json,
+            flat_fields=flat_fields,
+        )
+        result = await _t_review_gate.review_candidate_update(
+            candidate_id=candidate_id,
+            overrides=parsed_overrides,
+            updated_by=updated_by or "owner",
+            update_note=update_note or "",
+        )
+        return _json_lib.dumps(result, ensure_ascii=False, indent=2)
+
+    return await _with_notice(
+        _run(),
+        op="review_candidate_update",
+        args={
+            "candidate_id": candidate_id,
+            "has_overrides": isinstance(overrides, dict),
+            "overrides_json_type": type(overrides_json).__name__ if overrides_json is not None else "",
+            "updated_by": updated_by,
+        },
+    )
+
+
+@mcp_extra.tool()
 async def reject_pending_memory(candidate_id: str, reason: Optional[str] = "") -> str:
     """拒绝一条 pending 候选，将其移动到 memory_review/rejected。不会修改正式记忆库。"""
     return await _with_notice(
         _t_review_gate.reject_pending_memory(candidate_id, reason or ""),
         op="reject_pending_memory",
         args={"candidate_id": candidate_id, "reason_len": len(reason or "")},
+    )
+
+
+@mcp_extra.tool()
+async def review_candidate_resubmit(
+    candidate_id: str,
+    overrides_json: Optional[str] = "",
+    resubmitted_by: Optional[str] = "owner",
+    resubmit_note: Optional[str] = "",
+) -> str:
+    """把 rejected Review candidate 重新提交为新的 pending candidate。原 rejected 文件保持不动。"""
+    async def _run() -> str:
+        overrides = {}
+        if overrides_json and overrides_json.strip():
+            parsed = _json_lib.loads(overrides_json)
+            if not isinstance(parsed, dict):
+                raise ValueError("overrides_json must be JSON object")
+            overrides = parsed
+        result = await _t_review_gate.review_candidate_resubmit(
+            candidate_id=candidate_id,
+            overrides=overrides,
+            resubmitted_by=resubmitted_by or "owner",
+            resubmit_note=resubmit_note or "",
+        )
+        return _json_lib.dumps(result, ensure_ascii=False, indent=2)
+
+    return await _with_notice(
+        _run(),
+        op="review_candidate_resubmit",
+        args={
+            "candidate_id": candidate_id,
+            "overrides_len": len(overrides_json or ""),
+            "resubmitted_by": resubmitted_by,
+        },
     )
 
 
@@ -905,8 +998,12 @@ async def journal_read(
     domain: Optional[str] = "",
     max_results: Optional[int] = 10,
     include_full: Optional[bool] = False,
+    content_max_chars: Optional[int] = 4000,
+    include_history: Optional[bool] = False,
+    history_limit: Optional[int] = 10,
+    include_trash: Optional[bool] = False,
 ) -> str:
-    """读取 journal 日记。支持 query 关键词、entry_type、日期、tags/domain 过滤；include_full=True 返回完整正文。"""
+    """Read journal entries. Default output is lightweight; set include_full=True to return capped content."""
     return await _with_notice(
         _t_journal.journal_read_json(
             query=query or "",
@@ -917,6 +1014,10 @@ async def journal_read(
             domain=domain or "",
             max_results=max_results if max_results is not None else 10,
             include_full=include_full if include_full is not None else False,
+            content_max_chars=content_max_chars if content_max_chars is not None else 4000,
+            include_history=include_history if include_history is not None else False,
+            history_limit=history_limit if history_limit is not None else 10,
+            include_trash=include_trash if include_trash is not None else False,
         ),
         op="journal_read",
         args={
@@ -928,7 +1029,96 @@ async def journal_read(
             "domain": domain,
             "max_results": max_results,
             "include_full": include_full,
+            "content_max_chars": content_max_chars,
+            "include_history": include_history,
+            "history_limit": history_limit,
+            "include_trash": include_trash,
         },
+    )
+
+
+@mcp_extra.tool()
+async def journal_list(
+    query: Optional[str] = "",
+    entry_type: Optional[str] = "",
+    date_from: Optional[str] = "",
+    date_to: Optional[str] = "",
+    tags: Optional[str] = "",
+    domain: Optional[str] = "",
+    max_results: Optional[int] = 10,
+    include_trash: Optional[bool] = False,
+) -> str:
+    """Lightweight journal list: no full content and no history."""
+    return await _with_notice(
+        _t_journal.journal_list_json(
+            query=query or "",
+            entry_type=entry_type or "",
+            date_from=date_from or "",
+            date_to=date_to or "",
+            tags=tags or "",
+            domain=domain or "",
+            max_results=max_results if max_results is not None else 10,
+            include_trash=include_trash if include_trash is not None else False,
+        ),
+        op="journal_list",
+        args={
+            "query": query,
+            "entry_type": entry_type,
+            "date_from": date_from,
+            "date_to": date_to,
+            "tags": tags,
+            "domain": domain,
+            "max_results": max_results,
+            "include_trash": include_trash,
+        },
+    )
+
+
+@mcp_extra.tool()
+async def journal_read_trash(
+    query: Optional[str] = "",
+    entry_type: Optional[str] = "",
+    max_results: Optional[int] = 20,
+    include_full: Optional[bool] = False,
+    include_history: Optional[bool] = False,
+    history_limit: Optional[int] = 10,
+) -> str:
+    """读取 buckets/journals/_trash 中的 soft deleted journal。普通 journal_read 默认不会返回这些日记。"""
+    return await _with_notice(
+        _t_journal.journal_read_trash_json(
+            query=query or "",
+            entry_type=entry_type or "",
+            max_results=max_results if max_results is not None else 20,
+            include_full=include_full if include_full is not None else False,
+            include_history=include_history if include_history is not None else False,
+            history_limit=history_limit if history_limit is not None else 10,
+        ),
+        op="journal_read_trash",
+        args={
+            "query": query,
+            "entry_type": entry_type,
+            "max_results": max_results,
+            "include_full": include_full,
+            "include_history": include_history,
+            "history_limit": history_limit,
+        },
+    )
+
+
+@mcp_extra.tool()
+async def journal_history(
+    journal_id: str,
+    limit: Optional[int] = 10,
+) -> str:
+    """Read recent journal edit history on demand; default 10, max 50."""
+    return await _with_notice(
+        _t_journal.journal_history_json(
+            journal_id=journal_id,
+            limit=limit if limit is not None else 10,
+            include_trash=True,
+        ),
+        op="journal_history",
+        args={"journal_id": journal_id, "limit": limit},
     )
 
 

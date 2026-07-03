@@ -21,6 +21,13 @@ from .. import _runtime as rt
 ENTRY_TYPES = {"handoff", "event", "free"}
 STATUSES = {"active", "archived"}
 DEFAULT_IMPORTANCE = 5
+MAX_INLINE_HISTORY = 20
+DEFAULT_HISTORY_RETURN = 10
+MAX_HISTORY_RETURN = 50
+MAX_CONTENT_PREVIEW = 500
+MAX_LIST_CONTENT_PREVIEW = 300
+DEFAULT_FULL_CONTENT_MAX_CHARS = 4000
+MAX_FULL_CONTENT_CHARS = 20000
 JOURNAL_ID_RE = re.compile(r"^journal-\d{8}-\d{6}-\d{3}$")
 UNSET = object()
 PROTECTED_UPDATE_FIELDS = {
@@ -230,6 +237,20 @@ def _safe_journal_files() -> list[Path]:
     return files
 
 
+def _trash_journal_files() -> list[Path]:
+    trash = journal_root() / "_trash"
+    if not trash.exists():
+        return []
+    files: list[Path] = []
+    for path in trash.rglob("*.md"):
+        try:
+            if path.resolve().is_file():
+                files.append(path)
+        except OSError:
+            continue
+    return files
+
+
 def _all_journal_files() -> list[Path]:
     root = journal_root()
     if not root.exists():
@@ -255,7 +276,7 @@ def _journal_id_exists(journal_id: str) -> bool:
     return False
 
 
-def find_journal_file(identifier: str) -> Optional[Path]:
+def find_journal_file(identifier: str, include_trash: bool = False) -> Optional[Path]:
     raw = str(identifier or "").strip()
     if not raw:
         return None
@@ -273,7 +294,7 @@ def find_journal_file(identifier: str) -> Optional[Path]:
             if candidate == root or root not in candidate.parents:
                 return None
             trash = (root / "_trash").resolve()
-            if trash == candidate or trash in candidate.parents:
+            if not include_trash and (trash == candidate or trash in candidate.parents):
                 return None
             return candidate
     except OSError:
@@ -281,7 +302,8 @@ def find_journal_file(identifier: str) -> Optional[Path]:
 
     # 2) journal_id from frontmatter.
     if JOURNAL_ID_RE.match(raw):
-        for path in _safe_journal_files():
+        files = _safe_journal_files() + (_trash_journal_files() if include_trash else [])
+        for path in files:
             try:
                 entry = _read_post(path)
             except Exception:
@@ -291,7 +313,8 @@ def find_journal_file(identifier: str) -> Optional[Path]:
 
     # 3) file_name fallback.
     if raw.endswith(".md") and "/" not in raw and "\\" not in raw:
-        for path in _safe_journal_files():
+        files = _safe_journal_files() + (_trash_journal_files() if include_trash else [])
+        for path in files:
             if path.name == raw:
                 return path
     return None
@@ -302,16 +325,99 @@ def _summary(content: str, limit: int = 180) -> str:
     return text[:limit] + ("…" if len(text) > limit else "")
 
 
-def _entry_to_result(entry: dict[str, Any], include_full: bool = False) -> dict[str, Any]:
+def _content_preview(content: str, limit: int = MAX_LIST_CONTENT_PREVIEW) -> str:
+    text = re.sub(r"\s+", " ", (content or "").strip())
+    if len(text) <= limit:
+        return text
+    if limit <= 3:
+        return text[:limit]
+    return text[: limit - 3] + "..."
+
+
+def _clamp_history_limit(value: Any = DEFAULT_HISTORY_RETURN) -> int:
+    try:
+        limit = int(value if value is not None else DEFAULT_HISTORY_RETURN)
+    except (TypeError, ValueError):
+        limit = DEFAULT_HISTORY_RETURN
+    return max(1, min(MAX_HISTORY_RETURN, limit))
+
+
+def _clamp_content_max_chars(value: Any = DEFAULT_FULL_CONTENT_MAX_CHARS) -> int:
+    try:
+        limit = int(value if value is not None else DEFAULT_FULL_CONTENT_MAX_CHARS)
+    except (TypeError, ValueError):
+        limit = DEFAULT_FULL_CONTENT_MAX_CHARS
+    return max(1, min(MAX_FULL_CONTENT_CHARS, limit))
+
+
+def _truncate_content(content: str, max_chars: Any = None) -> tuple[str, bool]:
+    text = content or ""
+    if max_chars is None:
+        return text, False
+    limit = _clamp_content_max_chars(max_chars)
+    return text[:limit], len(text) > limit
+
+
+def _history_preview(content: str, limit: int = MAX_CONTENT_PREVIEW) -> str:
+    text = re.sub(r"\s+", " ", (content or "").strip())
+    return text[:limit] + ("..." if len(text) > limit else "")
+
+
+def _normalize_history(raw_history: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw_history, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    for raw_item in raw_history:
+        if not isinstance(raw_item, dict):
+            continue
+        item = dict(raw_item)
+        snapshot = item.get("previous_snapshot")
+        if isinstance(snapshot, dict):
+            clean_snapshot = dict(snapshot)
+            clean_snapshot.pop("content", None)
+            if "content_preview" in clean_snapshot:
+                clean_snapshot["content_preview"] = _history_preview(str(clean_snapshot.get("content_preview") or ""))
+            item["previous_snapshot"] = clean_snapshot
+        normalized.append(item)
+    return normalized[-MAX_INLINE_HISTORY:]
+
+
+def _latest_history_preview(history: list[dict[str, Any]]) -> str:
+    if not history:
+        return ""
+    latest = history[-1]
+    snapshot = latest.get("previous_snapshot")
+    if isinstance(snapshot, dict) and snapshot.get("content_preview"):
+        return _history_preview(str(snapshot.get("content_preview") or ""))
+    note = str(latest.get("update_note") or "")
+    fields = ", ".join(str(x) for x in (latest.get("changed_fields") or []))
+    return _history_preview(note or fields)
+
+
+def _entry_to_result(
+    entry: dict[str, Any],
+    include_full: bool = False,
+    include_history: bool = False,
+    history_limit: Any = DEFAULT_HISTORY_RETURN,
+    content_max_chars: Any = None,
+    include_frontmatter: bool = False,
+) -> dict[str, Any]:
     meta = entry["metadata"]
     content = entry["content"]
+    history = _normalize_history(meta.get("history"))
+    history_count = len(history)
     item = {
         "journal_id": meta.get("journal_id", ""),
+        "id": meta.get("journal_id", ""),
         "entry_type": meta.get("entry_type", "free"),
+        "journal_type": meta.get("entry_type", "free"),
         "title": meta.get("title", ""),
         "created_at": meta.get("created_at", ""),
         "updated_at": meta.get("updated_at", ""),
         "updated_by": meta.get("updated_by", ""),
+        "deleted_at": meta.get("deleted_at", ""),
+        "deleted_by": meta.get("deleted_by", ""),
+        "delete_note": meta.get("delete_note", ""),
         "author": meta.get("author", ""),
         "source": meta.get("source", ""),
         "tags": meta.get("tags") or [],
@@ -321,8 +427,11 @@ def _entry_to_result(entry: dict[str, Any], include_full: bool = False) -> dict[
         "importance": meta.get("importance", DEFAULT_IMPORTANCE),
         "mood": meta.get("mood", ""),
         "status": meta.get("status", "active"),
-        "history": meta.get("history") if isinstance(meta.get("history"), list) else [],
         "summary": _summary(content),
+        "content_preview": _content_preview(content),
+        "content_length": len(content or ""),
+        "history_count": history_count,
+        "latest_history_preview": _latest_history_preview(history),
         "path": entry["path"],
         "file_path": entry["path"],
         "relative_path": _relative_path(Path(entry["path"])),
@@ -330,8 +439,16 @@ def _entry_to_result(entry: dict[str, Any], include_full: bool = False) -> dict[
         "file_name": meta.get("file_name", ""),
     }
     if include_full:
-        item["content"] = content
-        item["frontmatter"] = {k: v for k, v in meta.items() if k not in {"path", "file_name"}}
+        limited_content, truncated = _truncate_content(content, content_max_chars)
+        item["content"] = limited_content
+        item["truncated"] = truncated
+        if include_frontmatter:
+            item["frontmatter"] = {k: v for k, v in meta.items() if k not in {"path", "file_name", "history"}}
+    if include_history:
+        limit = _clamp_history_limit(history_limit)
+        item["history"] = history[-limit:]
+        if include_full and include_frontmatter:
+            item["frontmatter"]["history"] = item["history"]
     return item
 
 
@@ -416,6 +533,10 @@ async def journal_read(
     domain: Optional[Any] = "",
     max_results: Optional[int] = 10,
     include_full: Optional[bool] = False,
+    content_max_chars: Optional[int] = DEFAULT_FULL_CONTENT_MAX_CHARS,
+    include_history: Optional[bool] = False,
+    history_limit: Optional[int] = DEFAULT_HISTORY_RETURN,
+    include_trash: Optional[bool] = False,
 ) -> list[dict[str, Any]]:
     q = (query or "").strip().lower()
     kind = (entry_type or "").strip().lower()
@@ -428,9 +549,13 @@ async def journal_read(
     except (TypeError, ValueError):
         limit = 10
     full = bool(include_full)
+    limited_content_chars = _clamp_content_max_chars(content_max_chars) if content_max_chars is not None else None
+    with_history = bool(include_history)
+    limited_history = _clamp_history_limit(history_limit)
 
     results: list[dict[str, Any]] = []
-    for path in _safe_journal_files():
+    files = _trash_journal_files() if include_trash else _safe_journal_files()
+    for path in files:
         try:
             entry = _read_post(path)
         except Exception:
@@ -450,13 +575,27 @@ async def journal_read(
             str(meta.get("title", "")),
             " ".join(meta.get("tags") or []),
             " ".join(meta.get("domain") or []),
+            str(meta.get("deleted_by", "")),
+            str(meta.get("delete_note", "")),
             entry["content"],
         ]).lower()
         if q and q not in haystack:
             continue
-        results.append(_entry_to_result(entry, include_full=full))
+        results.append(
+            _entry_to_result(
+                entry,
+                include_full=full,
+                include_history=with_history,
+                history_limit=limited_history,
+                content_max_chars=limited_content_chars,
+                include_frontmatter=False,
+            )
+        )
 
-    results.sort(key=lambda item: item.get("created_at", ""), reverse=True)
+    if include_trash:
+        results.sort(key=lambda item: item.get("deleted_at") or item.get("updated_at") or item.get("created_at", ""), reverse=True)
+    else:
+        results.sort(key=lambda item: item.get("created_at", ""), reverse=True)
     return results[:limit]
 
 
@@ -465,7 +604,43 @@ async def journal_read_json(**kwargs: Any) -> str:
     return json.dumps({"ok": True, "journals": items, "total": len(items)}, ensure_ascii=False, indent=2)
 
 
-def _history_preview(content: str, limit: int = 400) -> str:
+async def journal_list(**kwargs: Any) -> list[dict[str, Any]]:
+    kwargs["include_full"] = False
+    kwargs["include_history"] = False
+    return await journal_read(**kwargs)
+
+
+async def journal_list_json(**kwargs: Any) -> str:
+    items = await journal_list(**kwargs)
+    return json.dumps({"ok": True, "journals": items, "total": len(items)}, ensure_ascii=False, indent=2)
+
+
+async def journal_read_trash(
+    query: Optional[str] = "",
+    entry_type: Optional[str] = "",
+    max_results: Optional[int] = 50,
+    include_full: Optional[bool] = False,
+    include_history: Optional[bool] = False,
+    history_limit: Optional[int] = DEFAULT_HISTORY_RETURN,
+) -> list[dict[str, Any]]:
+    return await journal_read(
+        query=query,
+        entry_type=entry_type,
+        max_results=max_results,
+        include_full=include_full,
+        content_max_chars=None,
+        include_history=include_history,
+        history_limit=history_limit,
+        include_trash=True,
+    )
+
+
+async def journal_read_trash_json(**kwargs: Any) -> str:
+    items = await journal_read_trash(**kwargs)
+    return json.dumps({"ok": True, "journals": items, "total": len(items)}, ensure_ascii=False, indent=2)
+
+
+def _history_preview(content: str, limit: int = MAX_CONTENT_PREVIEW) -> str:
     text = re.sub(r"\s+", " ", (content or "").strip())
     return text[:limit] + ("..." if len(text) > limit else "")
 
@@ -567,6 +742,8 @@ async def journal_update(
             "updated_at": old_meta.get("updated_at", ""),
             "updated_by": old_meta.get("updated_by", ""),
             "changed_fields": [],
+            "history_count": len(_normalize_history(old_meta.get("history"))),
+            "content_length": len(old_content or ""),
             "path": str(path),
             "file_path": str(path),
             "relative_path": _relative_path(path),
@@ -590,7 +767,7 @@ async def journal_update(
             "content_preview": _history_preview(old_content),
         },
     })
-    new_meta["history"] = history[-20:]
+    new_meta["history"] = _normalize_history(history)
     new_meta["updated_at"] = updated_at
     new_meta["updated_by"] = actor
     new_meta["created_at"] = old_meta.get("created_at", "")
@@ -606,6 +783,8 @@ async def journal_update(
         "updated_at": updated_at,
         "updated_by": actor,
         "changed_fields": changed_fields,
+        "history_count": len(new_meta["history"]),
+        "content_length": len(new_content or ""),
         "path": str(path),
         "file_path": str(path),
         "relative_path": _relative_path(path),
@@ -664,7 +843,7 @@ async def journal_delete(
             "content_preview": _history_preview(old_content),
         },
     })
-    new_meta["history"] = history[-20:]
+    new_meta["history"] = _normalize_history(history)
     new_meta["updated_at"] = deleted_at
     new_meta["updated_by"] = actor
     new_meta["deleted_at"] = deleted_at
@@ -687,6 +866,8 @@ async def journal_delete(
         "deleted_by": actor,
         "trash_path": str(target),
         "backup_path": backup_path,
+        "history_count": len(new_meta["history"]),
+        "content_length": len(old_content or ""),
     }
 
 
@@ -695,12 +876,53 @@ async def journal_delete_json(**kwargs: Any) -> str:
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-async def journal_detail(identifier: str) -> Optional[dict[str, Any]]:
-    path = find_journal_file(identifier)
+async def journal_history(
+    journal_id: str,
+    limit: Optional[int] = DEFAULT_HISTORY_RETURN,
+    include_trash: Optional[bool] = True,
+) -> dict[str, Any]:
+    jid = str(journal_id or "").strip()
+    if not jid:
+        raise ValueError("journal_id required")
+    path = find_journal_file(jid, include_trash=bool(include_trash))
+    if not path:
+        raise FileNotFoundError(f"journal not found: {jid}")
+    meta, _content = _load_markdown(path)
+    if str(meta.get("journal_id") or "") != jid:
+        raise ValueError("journal_id mismatch")
+    history = _normalize_history(meta.get("history"))
+    n = _clamp_history_limit(limit)
+    return {
+        "ok": True,
+        "journal_id": jid,
+        "history_count": len(history),
+        "history": history[-n:],
+    }
+
+
+async def journal_history_json(**kwargs: Any) -> str:
+    result = await journal_history(**kwargs)
+    return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+async def journal_detail(
+    identifier: str,
+    include_trash: Optional[bool] = False,
+    include_history: Optional[bool] = False,
+    history_limit: Optional[int] = DEFAULT_HISTORY_RETURN,
+) -> Optional[dict[str, Any]]:
+    path = find_journal_file(identifier, include_trash=bool(include_trash))
     if not path:
         return None
     entry = _read_post(path)
-    return _entry_to_result(entry, include_full=True)
+    return _entry_to_result(
+        entry,
+        include_full=True,
+        include_history=bool(include_history),
+        history_limit=history_limit,
+        content_max_chars=None,
+        include_frontmatter=True,
+    )
 
 
 async def move_journal_to_trash(journal_id: str) -> Optional[str]:

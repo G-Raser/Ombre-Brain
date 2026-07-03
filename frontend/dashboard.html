@@ -2850,6 +2850,12 @@
     border-color: color-mix(in srgb, var(--negative) 35%, var(--border));
     opacity: 0.82;
   }
+  .journal-trash-card {
+    opacity: 0.82;
+  }
+  .journal-trash-card .review-card-title {
+    color: var(--text-dim);
+  }
 
   @media (max-width: 768px) {
     html, body {
@@ -4130,6 +4136,42 @@
       </div>
       <div id="review-detail" style="font-size:12px;line-height:1.7;color:var(--text);"></div>
     </div>
+
+    <div class="config-section" id="review-edit-panel" style="display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+        <h3 id="review-edit-heading" style="margin:0;">编辑候选</h3>
+        <button onclick="closeReviewEditPanel()" title="取消编辑" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="x"></i> 取消</button>
+      </div>
+      <div class="journal-edit-form">
+        <div class="journal-edit-grid">
+          <label>标题
+            <input id="review-edit-title" type="text" />
+          </label>
+          <label>importance
+            <input id="review-edit-importance" type="number" min="1" max="10" />
+          </label>
+        </div>
+        <div class="journal-edit-grid">
+          <label>tags（逗号分隔）
+            <input id="review-edit-tags" type="text" />
+          </label>
+          <label>domain（逗号分隔）
+            <input id="review-edit-domain" type="text" />
+          </label>
+        </div>
+        <label>正文
+          <textarea id="review-edit-content" class="journal-edit-content"></textarea>
+        </label>
+        <label>notes / 修改说明
+          <textarea id="review-edit-notes" class="journal-edit-note"></textarea>
+        </label>
+        <div class="journal-edit-actions" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+          <button class="btn-secondary" onclick="closeReviewEditPanel()" type="button">取消</button>
+          <button id="review-edit-save" onclick="saveReviewCandidateEdit()" type="button"><i data-lucide="save"></i> 保存</button>
+        </div>
+        <div id="review-edit-status" style="min-height:18px;font-size:12px;color:var(--text-dim);"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -4145,6 +4187,7 @@
         <button id="journal-tab-handoff" class="btn-secondary" onclick="setJournalType('handoff')" style="padding:7px 12px;font-size:12px;">交接</button>
         <button id="journal-tab-event" class="btn-secondary" onclick="setJournalType('event')" style="padding:7px 12px;font-size:12px;">事件</button>
         <button id="journal-tab-free" class="btn-secondary" onclick="setJournalType('free')" style="padding:7px 12px;font-size:12px;">自由</button>
+        <button id="journal-tab-trash" class="btn-secondary" onclick="setJournalTrash()" style="padding:7px 12px;font-size:12px;">回收站 / Trash</button>
         <input type="text" id="journal-query" placeholder="搜索标题或正文…" onkeydown="if(event.key==='Enter')loadJournals()" style="min-width:220px;flex:1;" />
         <button onclick="loadJournals()" title="搜索" style="height:34px;padding:0 12px;"><i data-lucide="search"></i></button>
       </div>
@@ -7519,6 +7562,8 @@ function esc(s) {
 var reviewCandidates = [];
 var reviewSelectedId = '';
 var reviewArea = 'pending';
+var reviewEditMode = '';
+var reviewEditCandidateId = '';
 var REVIEW_HIGH_IMPACT_TYPES = ['I', 'feel', 'anchor', 'pinned', 'update', 'delete'];
 
 function reviewTags(tags) {
@@ -7603,6 +7648,7 @@ function updateReviewAreaButtons() {
 }
 
 var journalType = '';
+var journalArea = 'active';
 var journalItems = [];
 var currentJournalDetail = null;
 var journalEditKey = '';
@@ -7616,7 +7662,15 @@ function journalTypeLabel(t) {
 }
 
 function setJournalType(type) {
+  journalArea = 'active';
   journalType = ['handoff', 'event', 'free'].indexOf(type) >= 0 ? type : '';
+  clearJournalDetail();
+  loadJournals();
+}
+
+function setJournalTrash() {
+  journalArea = 'trash';
+  journalType = '';
   clearJournalDetail();
   loadJournals();
 }
@@ -7626,9 +7680,15 @@ function updateJournalButtons() {
     var id = type || 'all';
     var el = document.getElementById('journal-tab-' + id);
     if (!el) return;
-    el.style.boxShadow = type === journalType ? 'inset 2px 2px 5px var(--shadow-dark-subtle), inset -2px -2px 5px var(--shadow-light)' : '';
-    el.style.color = type === journalType ? 'var(--accent)' : '';
+    var active = journalArea === 'active' && type === journalType;
+    el.style.boxShadow = active ? 'inset 2px 2px 5px var(--shadow-dark-subtle), inset -2px -2px 5px var(--shadow-light)' : '';
+    el.style.color = active ? 'var(--accent)' : '';
   });
+  var trash = document.getElementById('journal-tab-trash');
+  if (trash) {
+    trash.style.boxShadow = journalArea === 'trash' ? 'inset 2px 2px 5px var(--shadow-dark-subtle), inset -2px -2px 5px var(--shadow-light)' : '';
+    trash.style.color = journalArea === 'trash' ? 'var(--accent)' : '';
+  }
 }
 
 function journalPills(items) {
@@ -7666,6 +7726,27 @@ function journalHistoryHtml(history) {
       '</div>'
     );
   }).join('');
+}
+
+async function loadJournalHistoryForCurrent(detailsEl) {
+  if (!detailsEl || !detailsEl.open || detailsEl.dataset.loaded === '1') return;
+  var box = document.getElementById('journal-history-lazy');
+  if (!box || !currentJournalDetail || !currentJournalDetail.journal_id) return;
+  box.innerHTML = '<div class="journal-history-item">加载中...</div>';
+  try {
+    var resp = await authFetch('/api/journal/' + encodeURIComponent(currentJournalDetail.journal_id) + '/history?limit=10');
+    if (!resp) return;
+    var data = await readJsonSafe(resp);
+    if (!data.ok) throw new Error(data.error || '读取失败');
+    currentJournalDetail.history_count = data.history_count || 0;
+    currentJournalDetail.history = data.history || [];
+    box.innerHTML = journalHistoryHtml(data.history || []);
+    detailsEl.dataset.loaded = '1';
+    var summary = detailsEl.querySelector('summary');
+    if (summary) summary.textContent = '修改记录 / Edit history (' + String(data.history_count || 0) + ')';
+  } catch (e) {
+    box.innerHTML = '<div class="journal-history-item" style="color:var(--negative);">修改记录加载失败：' + esc(e.message || e) + '</div>';
+  }
 }
 
 function journalMarkdown(content) {
@@ -7730,8 +7811,16 @@ function renderJournalCard(item) {
   var keyArg = JSON.stringify(detailKey).replace(/"/g, '&quot;');
   var idArg = JSON.stringify(id).replace(/"/g, '&quot;');
   var chipHtml = journalChips(item.tags, '#') + journalChips(item.domain, '· ');
+  var isTrash = journalArea === 'trash' || item.status === 'trashed' || item.deleted_at;
+  var deletedRows = isTrash
+    ? '<div class="journal-card-meta">' +
+        '<span>deleted: ' + esc((item.deleted_at || '').slice(0, 19).replace('T', ' ') || '—') + '</span>' +
+        '<span>by: ' + esc(item.deleted_by || '—') + '</span>' +
+        (item.delete_note ? '<span>note: ' + esc(item.delete_note) + '</span>' : '') +
+      '</div>'
+    : '';
   return (
-    '<div class="review-card">' +
+    '<div class="review-card' + (isTrash ? ' journal-trash-card' : '') + '">' +
       '<div class="review-card-inner">' +
         '<div class="review-card-main">' +
           '<div class="review-pill-row">' +
@@ -7744,13 +7833,14 @@ function renderJournalCard(item) {
             '<span>' + esc(item.author || 'agent') + '</span>' +
             '<span>status: ' + esc(item.status || 'active') + '</span>' +
           '</div>' +
+          deletedRows +
           (chipHtml ? '<div class="journal-tag-row">' + chipHtml + '</div>' : '') +
           '<div class="review-card-summary">' + esc(item.summary || '') + '</div>' +
         '</div>' +
         '<div class="review-card-actions">' +
           '<button onclick="loadJournalDetail(' + keyArg + ')" title="查看详情" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="eye"></i> 查看详情</button>' +
-          '<button class="btn-secondary" onclick="openJournalEditor(' + keyArg + ')" title="编辑日记" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="edit-3"></i> 编辑</button>' +
-          '<button class="btn-secondary journal-delete-button" onclick="deleteJournal(' + idArg + ')" title="移动到 _trash" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="trash-2"></i> 删除</button>' +
+          (isTrash ? '' : '<button class="btn-secondary" onclick="openJournalEditor(' + keyArg + ')" title="编辑日记" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="edit-3"></i> 编辑</button>') +
+          (isTrash ? '' : '<button class="btn-secondary journal-delete-button" onclick="deleteJournal(' + idArg + ')" title="移动到 _trash" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="trash-2"></i> 删除</button>') +
         '</div>' +
       '</div>' +
     '</div>'
@@ -7766,17 +7856,20 @@ async function loadJournals() {
   list.innerHTML = '<div class="loading">加载中…</div>';
   var q = (document.getElementById('journal-query') || {}).value || '';
   var params = new URLSearchParams({max_results: '100'});
-  if (journalType) params.set('entry_type', journalType);
+  if (journalArea === 'active' && journalType) params.set('entry_type', journalType);
   if (q.trim()) params.set('query', q.trim());
   try {
-    var resp = await authFetch('/api/journals?' + params.toString());
+    var endpoint = journalArea === 'trash' ? '/api/journals/trash?' : '/api/journals?';
+    var resp = await authFetch(endpoint + params.toString());
     if (!resp) return;
     var data = await readJsonSafe(resp);
     if (!data.ok) throw new Error(data.error || '读取失败');
     journalItems = data.journals || [];
-    meta.textContent = '日记：' + journalItems.length + ' 条';
+    meta.textContent = (journalArea === 'trash' ? '回收站：' : '日记：') + journalItems.length + ' 条';
     if (!journalItems.length) {
-      list.innerHTML = '<div style="padding:28px 18px;text-align:center;color:var(--text-dim);font-size:13px;line-height:1.8;border:1px solid var(--border);border-radius:8px;background:var(--surface);"><div style="font-weight:600;color:var(--text);margin-bottom:4px;">暂无日记。</div><div>journal_write 写入的交接、事件和自由日记会出现在这里。</div></div>';
+      var emptyTitle = journalArea === 'trash' ? '回收站暂无日记。' : '暂无日记。';
+      var emptyBody = journalArea === 'trash' ? '被 soft delete 的日记会移动到 buckets/journals/_trash/，并出现在这里。' : 'journal_write 写入的交接、事件和自由日记会出现在这里。';
+      list.innerHTML = '<div style="padding:28px 18px;text-align:center;color:var(--text-dim);font-size:13px;line-height:1.8;border:1px solid var(--border);border-radius:8px;background:var(--surface);"><div style="font-weight:600;color:var(--text);margin-bottom:4px;">' + esc(emptyTitle) + '</div><div>' + esc(emptyBody) + '</div></div>';
       clearJournalDetail();
       return;
     }
@@ -7795,7 +7888,9 @@ async function loadJournalDetail(detailKey) {
   panel.style.display = '';
   detail.innerHTML = '<div class="loading">加载中…</div>';
   try {
-    var resp = await authFetch('/api/journal-detail?key=' + encodeURIComponent(detailKey));
+    var detailParams = new URLSearchParams({key: detailKey});
+    if (journalArea === 'trash') detailParams.set('include_trash', 'true');
+    var resp = await authFetch('/api/journal-detail?' + detailParams.toString());
     if (!resp) return;
     var data = await readJsonSafe(resp);
     if (!data.ok) throw new Error(data.error || '读取失败');
@@ -7803,6 +7898,7 @@ async function loadJournalDetail(detailKey) {
     currentJournalDetail = j;
     journalEditKey = detailKey || j.detail_key || j.relative_path || j.journal_id || '';
     var deleteArg = JSON.stringify(j.journal_id || '').replace(/"/g, '&quot;');
+    var isTrash = journalArea === 'trash' || j.status === 'trashed' || j.deleted_at;
     var fm = j.frontmatter || {};
     var chipHtml = journalChips(j.tags, '#') + journalChips(j.domain, '· ');
     var metaRows =
@@ -7811,6 +7907,9 @@ async function loadJournalDetail(detailKey) {
       reviewField('created_at', reviewValue(j.created_at)) +
       reviewField('updated_at', reviewValue(j.updated_at)) +
       reviewField('updated_by', reviewValue(j.updated_by || '—')) +
+      reviewField('deleted_at', reviewValue(j.deleted_at || '—')) +
+      reviewField('deleted_by', reviewValue(j.deleted_by || '—')) +
+      reviewField('delete_note', reviewValue(j.delete_note || '—')) +
       reviewField('author', reviewValue(j.author)) +
       reviewField('source', reviewValue(j.source)) +
       reviewField('tags', journalPills(j.tags)) +
@@ -7831,23 +7930,26 @@ async function loadJournalDetail(detailKey) {
             '<span>importance ' + esc(String(j.importance || '—')) + '</span>' +
             '<span>' + esc(j.author || 'agent') + '</span>' +
             (j.updated_by ? '<span>updated by ' + esc(j.updated_by) + '</span>' : '') +
+            (j.deleted_at ? '<span>deleted ' + esc((j.deleted_at || '').slice(0, 19).replace('T', ' ')) + '</span>' : '') +
+            (j.deleted_by ? '<span>deleted by ' + esc(j.deleted_by) + '</span>' : '') +
           '</div>' +
+          (j.delete_note ? '<div class="journal-card-meta"><span>delete_note: ' + esc(j.delete_note) + '</span></div>' : '') +
           (chipHtml ? '<div class="journal-tag-row">' + chipHtml + '</div>' : '') +
           '<div class="journal-body">' + journalMarkdown(j.content || '') + '</div>' +
-          '<div class="journal-detail-toolbar">' +
+          (isTrash ? '' : '<div class="journal-detail-toolbar">' +
             '<button class="btn-secondary" onclick="openJournalEditorFromCurrent()" title="编辑日记" style="padding:7px 12px;font-size:12px;display:inline-flex;align-items:center;gap:5px;"><i data-lucide="edit-3"></i> 编辑</button>' +
-          '</div>' +
+          '</div>') +
         '</article>' +
-        '<details class="journal-metadata-details">' +
-          '<summary>修改记录 / Edit history (' + esc(String((j.history || []).length)) + ')</summary>' +
-          '<div class="journal-history-list">' + journalHistoryHtml(j.history || []) + '</div>' +
+        '<details class="journal-metadata-details" ontoggle="loadJournalHistoryForCurrent(this)">' +
+          '<summary>修改记录 / Edit history (' + esc(String(j.history_count || 0)) + ')</summary>' +
+          '<div id="journal-history-lazy" class="journal-history-list"><div class="journal-history-item">展开后加载最近修改记录。</div></div>' +
         '</details>' +
-        '<details class="journal-metadata-details">' +
+        (isTrash ? '' : '<details class="journal-metadata-details">' +
           '<summary>危险操作 / Danger zone</summary>' +
           '<div class="journal-danger-actions">' +
             '<button class="btn-secondary journal-delete-button" onclick="deleteJournal(' + deleteArg + ')" title="移动到 _trash，不会永久删除" style="padding:7px 12px;font-size:12px;display:inline-flex;align-items:center;gap:5px;"><i data-lucide="trash-2"></i> 移动到 _trash</button>' +
           '</div>' +
-        '</details>' +
+        '</details>') +
         '<details class="journal-metadata-details">' +
           '<summary>元数据 / Metadata</summary>' +
           '<div class="journal-metadata-grid">' + metaRows + '</div>' +
@@ -8074,11 +8176,14 @@ function renderReviewCandidate(item) {
   var actions = '<button onclick="loadReviewDetail(' + keyArg + ')" title="查看详情" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="eye"></i> 查看详情</button>';
   if (reviewArea === 'pending') {
     actions +=
+      '<button class="btn-secondary" onclick="openReviewCandidateEditor(' + keyArg + ', \'update\')" title="编辑候选" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="edit-3"></i> 编辑</button>' +
       '<button onclick="rejectReviewCandidate(' + keyArg + ')" title="拒绝" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="x-circle"></i> 拒绝</button>' +
       '<button class="btn-secondary" onclick="approveReviewCandidate(' + keyArg + ', true)" title="Dry-run 批准" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="scan-line"></i> Dry-run 批准</button>' +
       '<button class="btn-danger review-danger-action" onclick="approveReviewCandidate(' + keyArg + ', false)" title="正式批准" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="check-circle"></i> 正式批准</button>';
   } else if (reviewArea === 'rejected') {
-    actions += '<button class="btn-secondary" onclick="restoreRejectedCandidate(' + keyArg + ')" title="恢复到待审核" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="rotate-ccw"></i> 恢复到待审核</button>';
+    actions +=
+      '<button class="btn-secondary" onclick="openReviewCandidateEditor(' + keyArg + ', \'resubmit\')" title="重新提交" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="send"></i> 重新提交</button>' +
+      '<button class="btn-secondary" onclick="restoreRejectedCandidate(' + keyArg + ')" title="恢复到待审核" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="rotate-ccw"></i> 恢复到待审核</button>';
   }
   return (
     '<div id="review-card-' + esc(key) + '" class="review-card">' +
@@ -8120,7 +8225,7 @@ async function loadReviewDetail(id) {
   panel.style.display = '';
   detail.innerHTML = '<div class="loading">加载中…</div>';
   try {
-    var resp = await authFetch('/api/review/' + encodeURIComponent(reviewArea) + '/' + encodeURIComponent(id));
+    var resp = await authFetch('/api/review/' + encodeURIComponent(reviewArea) + '/' + encodeURIComponent(id) + '?include_history=true&history_limit=10');
     if (!resp) return;
     var data = await readJsonSafe(resp);
     if (!data.ok) throw new Error(data.error || '读取失败');
@@ -8137,6 +8242,11 @@ async function loadReviewDetail(id) {
       reviewField('tags', reviewTags(c.tags || fm.tags)) +
       reviewField('created_by', reviewValue(c.created_by || fm.created_by)) +
       reviewField('created_at', reviewValue(c.created_at || fm.created_at));
+    if (c.updated_at || fm.updated_at) summaryRows += reviewField('updated_at', reviewValue(c.updated_at || fm.updated_at));
+    if (c.updated_by || fm.updated_by) summaryRows += reviewField('updated_by', reviewValue(c.updated_by || fm.updated_by));
+    if (c.resubmitted_from || fm.resubmitted_from) summaryRows += reviewField('resubmitted_from', reviewValue(c.resubmitted_from || fm.resubmitted_from));
+    if (c.resubmitted_at || fm.resubmitted_at) summaryRows += reviewField('resubmitted_at', reviewValue(c.resubmitted_at || fm.resubmitted_at));
+    if (c.resubmitted_by || fm.resubmitted_by) summaryRows += reviewField('resubmitted_by', reviewValue(c.resubmitted_by || fm.resubmitted_by));
     if (c.approved_at || fm.approved_at) summaryRows += reviewField('approved_at', reviewValue(c.approved_at || fm.approved_at));
     if (c.rejected_at || fm.rejected_at) summaryRows += reviewField('rejected_at', reviewValue(c.rejected_at || fm.rejected_at));
     if (c.rejection_reason || fm.rejection_reason) summaryRows += reviewField('rejection_reason', reviewValue(c.rejection_reason || fm.rejection_reason));
@@ -8148,7 +8258,7 @@ async function loadReviewDetail(id) {
       reviewField('reason', reviewValue(c.reason || fm.reason)) +
       reviewField('notes', reviewValue(c.notes || fm.notes));
 
-    var rawFields = ['candidate_key','file_name','candidate_id','candidate_id_mismatch','source_location','target_bucket_id','needs_user_confirmation','explicitly_approved','source_quote','approved_result'];
+    var rawFields = ['candidate_key','file_name','candidate_id','candidate_id_mismatch','source_location','target_bucket_id','needs_user_confirmation','explicitly_approved','source_quote','original_arguments_keys','raw_frontmatter_keys','edit_history_count'];
     var rawRows = rawFields.map(function(k) {
       return reviewField(k, reviewValue(reviewFieldValue(c, fm, k)));
     }).join('');
@@ -8176,6 +8286,10 @@ async function loadReviewDetail(id) {
           '<summary>显示原始字段</summary>' +
           '<div class="review-raw-grid">' + rawRows + '</div>' +
         '</details>' +
+        '<details class="review-raw-details">' +
+          '<summary>修改记录 / Edit history</summary>' +
+          '<pre>' + esc(JSON.stringify(c.edit_history || [], null, 2)) + '</pre>' +
+        '</details>' +
         renderReviewDetailActions(idArg) +
       '</div>';
     if (window.lucide) lucide.createIcons();
@@ -8188,6 +8302,7 @@ async function loadReviewDetail(id) {
 function renderReviewDetailActions(idArg) {
   if (reviewArea === 'pending') {
     return '<div class="review-detail-actions">' +
+      '<button class="btn-secondary" onclick="openReviewCandidateEditor(' + idArg + ', \'update\')" style="padding:6px 10px;font-size:12px;"><i data-lucide="edit-3"></i> 编辑</button>' +
       '<button onclick="rejectReviewCandidate(' + idArg + ')" style="padding:6px 10px;font-size:12px;"><i data-lucide="x-circle"></i> 拒绝 / Reject</button>' +
       '<button class="btn-secondary" onclick="approveReviewCandidate(' + idArg + ', true)" style="padding:6px 10px;font-size:12px;">Dry-run 批准</button>' +
       '<button class="btn-danger review-danger-action" onclick="approveReviewCandidate(' + idArg + ', false)" style="padding:6px 10px;font-size:12px;">正式批准</button>' +
@@ -8195,6 +8310,7 @@ function renderReviewDetailActions(idArg) {
   }
   if (reviewArea === 'rejected') {
     return '<div class="review-detail-actions">' +
+      '<button class="btn-secondary" onclick="openReviewCandidateEditor(' + idArg + ', \'resubmit\')" style="padding:6px 10px;font-size:12px;"><i data-lucide="send"></i> 重新提交 / Resubmit</button>' +
       '<button class="btn-secondary" onclick="restoreRejectedCandidate(' + idArg + ')" style="padding:6px 10px;font-size:12px;"><i data-lucide="rotate-ccw"></i> 恢复到待审核 / Restore to Pending</button>' +
       '</div>';
   }
@@ -8207,6 +8323,109 @@ function clearReviewDetail() {
   var detail = document.getElementById('review-detail');
   if (panel) panel.style.display = 'none';
   if (detail) detail.innerHTML = '';
+  closeReviewEditPanel();
+}
+
+function closeReviewEditPanel() {
+  var panel = document.getElementById('review-edit-panel');
+  var status = document.getElementById('review-edit-status');
+  if (panel) panel.style.display = 'none';
+  if (status) {
+    status.style.color = 'var(--text-dim)';
+    status.textContent = '';
+  }
+  reviewEditMode = '';
+  reviewEditCandidateId = '';
+}
+
+function fillReviewEditPanel(candidate, mode, id) {
+  var panel = document.getElementById('review-edit-panel');
+  var heading = document.getElementById('review-edit-heading');
+  var save = document.getElementById('review-edit-save');
+  if (!panel) return;
+  reviewEditMode = mode;
+  reviewEditCandidateId = id;
+  if (heading) heading.textContent = mode === 'resubmit' ? '重新提交候选' : '编辑待审核候选';
+  if (save) save.innerHTML = mode === 'resubmit' ? '<i data-lucide="send"></i> 重新提交' : '<i data-lucide="save"></i> 保存修改';
+  var title = document.getElementById('review-edit-title');
+  var importance = document.getElementById('review-edit-importance');
+  var tags = document.getElementById('review-edit-tags');
+  var domain = document.getElementById('review-edit-domain');
+  var content = document.getElementById('review-edit-content');
+  var notes = document.getElementById('review-edit-notes');
+  if (title) title.value = candidate.title || '';
+  if (importance) importance.value = candidate.importance || candidate.suggested_importance || '';
+  if (tags) tags.value = Array.isArray(candidate.tags) ? candidate.tags.join(', ') : '';
+  if (domain) domain.value = Array.isArray(candidate.domain) ? candidate.domain.join(', ') : '';
+  if (content) content.value = candidate.candidate_content || candidate.content || '';
+  if (notes) notes.value = candidate.notes || '';
+  panel.style.display = '';
+  panel.scrollIntoView({behavior:'smooth', block:'start'});
+  if (window.lucide) lucide.createIcons();
+}
+
+async function openReviewCandidateEditor(id, mode) {
+  try {
+    var resp = await authFetch('/api/review/' + encodeURIComponent(reviewArea) + '/' + encodeURIComponent(id) + '?include_history=false');
+    if (!resp) return;
+    var data = await readJsonSafe(resp);
+    if (!data.ok) throw new Error(data.error || '读取失败');
+    fillReviewEditPanel(data.candidate || {}, mode || (reviewArea === 'rejected' ? 'resubmit' : 'update'), id);
+  } catch (e) {
+    alert('打开编辑面板失败：' + (e.message || e));
+  }
+}
+
+async function saveReviewCandidateEdit() {
+  var status = document.getElementById('review-edit-status');
+  var title = document.getElementById('review-edit-title');
+  var importance = document.getElementById('review-edit-importance');
+  var tags = document.getElementById('review-edit-tags');
+  var domain = document.getElementById('review-edit-domain');
+  var content = document.getElementById('review-edit-content');
+  var notes = document.getElementById('review-edit-notes');
+  if (!reviewEditCandidateId || !reviewEditMode) return;
+  var overrides = {
+    title: title ? title.value : '',
+    content: content ? content.value : '',
+    tags: tags ? journalListInput(tags.value) : [],
+    domain: domain ? journalListInput(domain.value) : [],
+    notes: notes ? notes.value : ''
+  };
+  if (importance && importance.value !== '') overrides.importance = Number(importance.value);
+  var url = reviewEditMode === 'resubmit'
+    ? '/api/review/rejected/' + encodeURIComponent(reviewEditCandidateId) + '/resubmit'
+    : '/api/review/pending/' + encodeURIComponent(reviewEditCandidateId) + '/update';
+  var payload = reviewEditMode === 'resubmit'
+    ? {overrides: overrides, resubmitted_by: 'owner', resubmit_note: overrides.notes || 'dashboard resubmit'}
+    : {overrides: overrides, updated_by: 'owner', update_note: overrides.notes || 'dashboard update'};
+  if (status) {
+    status.style.color = 'var(--text-dim)';
+    status.textContent = reviewEditMode === 'resubmit' ? '重新提交中…' : '保存中…';
+  }
+  try {
+    var resp = await authFetch(url, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if (!resp) return;
+    var data = await readJsonSafe(resp);
+    if (!data.ok) throw new Error(data.error || '保存失败');
+    if (status) {
+      status.style.color = 'var(--positive)';
+      status.textContent = reviewEditMode === 'resubmit'
+        ? '已重新提交为 ' + (data.new_candidate_id || data.candidate_id || '')
+        : '已保存。';
+    }
+    await loadReviewQueue();
+    if (reviewEditMode === 'update') await loadReviewDetail(reviewEditCandidateId);
+  } catch (e) {
+    if (status) {
+      status.style.color = 'var(--negative)';
+      status.textContent = '保存失败：' + (e.message || e);
+    }
+  }
 }
 
 async function rejectReviewCandidate(id) {

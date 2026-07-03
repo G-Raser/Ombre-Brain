@@ -78,7 +78,13 @@ def register(mcp) -> None:
             return err
         candidate_id = request.path_params.get("candidate_id", "")
         try:
-            item = await review_gate.read_pending_record(candidate_id)
+            item = await review_gate.read_pending_record(
+                candidate_id,
+                include_content=_truthy(request.query_params.get("include_content", "true")),
+                include_raw=_truthy(request.query_params.get("include_raw", "")),
+                include_history=_truthy(request.query_params.get("include_history", "")),
+                history_limit=int(request.query_params.get("history_limit", "10")),
+            )
             if not item:
                 return JSONResponse({"ok": False, "error": "Pending candidate not found"}, status_code=404)
             return _ok(candidate=item)
@@ -93,10 +99,89 @@ def register(mcp) -> None:
         candidate_id = request.path_params.get("candidate_id", "")
         try:
             area = _review_area(request.path_params.get("status", ""))
-            item = await review_gate.read_review_record(area, candidate_id)
+            item = await review_gate.read_review_record(
+                area,
+                candidate_id,
+                include_content=_truthy(request.query_params.get("include_content", "true")),
+                include_raw=_truthy(request.query_params.get("include_raw", "")),
+                include_history=_truthy(request.query_params.get("include_history", "")),
+                history_limit=int(request.query_params.get("history_limit", "10")),
+            )
             if not item:
                 return JSONResponse({"ok": False, "error": f"{area} candidate not found"}, status_code=404)
             return _ok(candidate=item, status=area)
+        except ValueError as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+    @mcp.custom_route("/api/review/pending/{candidate_id}/update", methods=["POST"])
+    async def api_review_pending_update(request: Request) -> Response:
+        err = sh._require_auth(request)
+        if err:
+            return err
+        candidate_id = request.path_params.get("candidate_id", "")
+        try:
+            body = await request.json()
+            if not isinstance(body, dict):
+                return JSONResponse({"ok": False, "error": "request body must be JSON object"}, status_code=400)
+            flat_fields = {
+                key: body.get(key)
+                for key in (
+                    "title",
+                    "content",
+                    "tags",
+                    "domain",
+                    "importance",
+                    "pinned",
+                    "feel",
+                    "valence",
+                    "arousal",
+                    "why_remembered",
+                    "notes",
+                )
+                if key in body
+            }
+            overrides = review_gate.coerce_review_overrides(
+                overrides=body.get("overrides"),
+                overrides_json=body.get("overrides_json"),
+                flat_fields=flat_fields,
+            )
+            result = await review_gate.review_candidate_update(
+                candidate_id=candidate_id,
+                overrides=overrides,
+                updated_by=str(body.get("updated_by") or "owner"),
+                update_note=str(body.get("update_note") or ""),
+            )
+            return JSONResponse(result)
+        except FileNotFoundError:
+            return JSONResponse({"ok": False, "error": "Pending candidate not found"}, status_code=404)
+        except ValueError as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+    @mcp.custom_route("/api/review/rejected/{candidate_id}/resubmit", methods=["POST"])
+    async def api_review_rejected_resubmit(request: Request) -> Response:
+        err = sh._require_auth(request)
+        if err:
+            return err
+        candidate_id = request.path_params.get("candidate_id", "")
+        try:
+            body = await request.json()
+            if body is None:
+                body = {}
+            if not isinstance(body, dict):
+                return JSONResponse({"ok": False, "error": "request body must be JSON object"}, status_code=400)
+            result = await review_gate.review_candidate_resubmit(
+                candidate_id=candidate_id,
+                overrides=body.get("overrides") if isinstance(body.get("overrides"), dict) else {},
+                resubmitted_by=str(body.get("resubmitted_by") or "owner"),
+                resubmit_note=str(body.get("resubmit_note") or ""),
+            )
+            return JSONResponse(result)
+        except FileNotFoundError:
+            return JSONResponse({"ok": False, "error": "Rejected candidate not found"}, status_code=404)
         except ValueError as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
         except Exception as e:

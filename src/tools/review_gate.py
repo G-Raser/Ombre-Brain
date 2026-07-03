@@ -515,6 +515,52 @@ def _content_summary(content: str, limit: int = 220) -> str:
     return text[: limit - 1].rstrip() + "…"
 
 
+def _preview_text(content: str, limit: int = 300) -> str:
+    text = re.sub(r"\s+", " ", str(content or "")).strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "…"
+
+
+def _candidate_override(meta: dict, key: str, default: Any = None) -> Any:
+    overrides = meta.get("review_overrides")
+    if isinstance(overrides, dict) and key in overrides and overrides.get(key) is not None:
+        return overrides.get(key)
+    return default
+
+
+def _append_edit_history(meta: dict, *, updated_at: str, updated_by: str, update_note: str, changed_fields: list[str], old_meta: dict, old_content: str) -> None:
+    history = meta.get("edit_history")
+    if not isinstance(history, list):
+        history = []
+    history.append(
+        {
+            "updated_at": updated_at,
+            "updated_by": updated_by,
+            "update_note": update_note[:500],
+            "changed_fields": changed_fields,
+            "previous_snapshot": {
+                "title": old_meta.get("title", ""),
+                "suggested_type": old_meta.get("suggested_type", ""),
+                "tags": old_meta.get("tags") or [],
+                "content_preview": _preview_text(_section(old_content, "候选内容") or old_content, 400),
+            },
+        }
+    )
+    meta["edit_history"] = history[-20:]
+
+
+def _limited_history(meta: dict, history_limit: int = 10) -> list[dict]:
+    history = meta.get("edit_history")
+    if not isinstance(history, list):
+        return []
+    try:
+        limit = max(0, min(50, int(history_limit)))
+    except (TypeError, ValueError):
+        limit = 10
+    return history[-limit:] if limit else []
+
+
 def _normalize_candidate_domain_value(value: Any) -> list[str]:
     if value in (None, "", [], ()):
         return []
@@ -548,18 +594,30 @@ def _candidate_domain(meta: dict) -> list[str]:
     return []
 
 
-def _candidate_record(path: Path, include_body: bool = False) -> dict:
+def _candidate_record(
+    path: Path,
+    include_body: bool = False,
+    include_raw: bool = False,
+    include_history: bool = False,
+    history_limit: int = 10,
+) -> dict:
     meta, content = _load_candidate(path)
     cid = str(meta.get("candidate_id") or path.stem)
     key = path.stem
+    override_content = _candidate_override(meta, "content", None)
+    candidate_content = str(override_content) if override_content is not None else _section(content, "候选内容")
+    preferred_title = str(_candidate_override(meta, "title", meta.get("title") or _first_heading(content, cid)) or "")
     title = generate_candidate_title(
-        _section(content, "候选内容") or content,
-        preferred_title=str(meta.get("title") or _first_heading(content, cid)),
+        candidate_content or content,
+        preferred_title=preferred_title,
         original_tool=str(meta.get("original_tool") or ""),
         original_arguments=meta.get("original_arguments_redacted") or {},
     )
     display_time = _candidate_display_time(meta, cid, path)
     display_title = _candidate_display_title(title, display_time)
+    edit_history = meta.get("edit_history") if isinstance(meta.get("edit_history"), list) else []
+    original_args = meta.get("original_arguments_redacted")
+    raw_frontmatter = meta.get("raw_frontmatter")
     record = {
         "candidate_key": key,
         "file_name": path.name,
@@ -569,33 +627,63 @@ def _candidate_record(path: Path, include_body: bool = False) -> dict:
         "display_time": display_time,
         "display_title": display_title,
         "suggested_type": meta.get("suggested_type", ""),
-        "suggested_importance": meta.get("suggested_importance", ""),
-        "tags": meta.get("tags") or [],
-        "domain": _candidate_domain(meta),
+        "suggested_importance": _candidate_override(meta, "importance", meta.get("suggested_importance", "")),
+        "importance": _candidate_override(meta, "importance", meta.get("suggested_importance", "")),
+        "tags": _candidate_override(meta, "tags", meta.get("tags") or []),
+        "domain": _candidate_override(meta, "domain", _candidate_domain(meta)),
         "created_by": meta.get("created_by", ""),
         "source_file": meta.get("source_file", ""),
         "status": meta.get("status", "pending"),
-        "content_summary": _content_summary(content),
+        "content_preview": _preview_text(candidate_content or content, 260),
+        "content_summary": _preview_text(candidate_content or content, 260),
+        "content_length": len(candidate_content or content or ""),
+        "has_original_arguments": isinstance(original_args, dict) and bool(original_args),
+        "has_raw_frontmatter": isinstance(raw_frontmatter, dict) and bool(raw_frontmatter),
+        "edit_history_count": len(edit_history),
+        "resubmitted_from": meta.get("resubmitted_from", ""),
+        "resubmitted_at": meta.get("resubmitted_at", ""),
+        "resubmitted_by": meta.get("resubmitted_by", ""),
         "created_at": meta.get("created_at", ""),
-        "original_tool": meta.get("original_tool", ""),
-        "perspective": meta.get("perspective", ""),
-        "reason": meta.get("reason", ""),
-        "notes": meta.get("notes", ""),
-        "source_quote": meta.get("source_quote", ""),
+        "updated_at": meta.get("updated_at", ""),
+        "updated_by": meta.get("updated_by", ""),
         "rejected_at": meta.get("rejected_at", meta.get("reviewed_at", "")),
         "rejection_reason": meta.get("rejection_reason", meta.get("reject_reason", "")),
         "approved_at": meta.get("approved_at", ""),
-        "approved_result": meta.get("approved_result", meta.get("formal_result", "")),
-        "needs_user_confirmation": _metadata_bool(meta.get("needs_user_confirmation", True)),
-        "explicitly_approved": _metadata_bool(meta.get("explicitly_approved", False)),
-        "target_bucket_id": meta.get("target_bucket_id", ""),
     }
     if include_body:
-        record["frontmatter"] = meta
+        record["original_tool"] = meta.get("original_tool", "")
+        record["perspective"] = meta.get("perspective", "")
+        record["reason"] = meta.get("reason", "")
+        record["notes"] = _candidate_override(meta, "notes", meta.get("notes", ""))
+        record["source_quote"] = meta.get("source_quote", "")
+        record["needs_user_confirmation"] = _metadata_bool(meta.get("needs_user_confirmation", True))
+        record["explicitly_approved"] = _metadata_bool(meta.get("explicitly_approved", False))
+        record["target_bucket_id"] = meta.get("target_bucket_id", "")
+        frontmatter = {
+            k: v
+            for k, v in meta.items()
+            if k
+            not in {
+                "original_arguments_redacted",
+                "raw_frontmatter",
+                "edit_history",
+                "approved_result",
+                "formal_result",
+            }
+        }
+        record["frontmatter"] = frontmatter
         record["body"] = content
-        record["candidate_content"] = _section(content, "候选内容")
+        record["candidate_content"] = candidate_content
+        record["content"] = candidate_content
         record["original_arguments_summary"] = _section(content, "原始调用摘要")
         record["planned_updates_summary"] = _section(content, "计划修改字段")
+        record["original_arguments_keys"] = sorted(original_args.keys()) if isinstance(original_args, dict) else []
+        record["raw_frontmatter_keys"] = sorted(raw_frontmatter.keys()) if isinstance(raw_frontmatter, dict) else []
+        if include_raw:
+            record["original_arguments_redacted"] = original_args if isinstance(original_args, dict) else {}
+            record["raw_frontmatter"] = raw_frontmatter if isinstance(raw_frontmatter, dict) else {}
+        if include_history:
+            record["edit_history"] = _limited_history(meta, history_limit)
     return record
 
 
@@ -611,16 +699,30 @@ async def list_pending_records(limit: int = 200) -> list[dict]:
     return await list_review_records("pending", limit=limit)
 
 
-async def read_review_record(area: str, candidate_id: str) -> dict | None:
+async def read_review_record(
+    area: str,
+    candidate_id: str,
+    *,
+    include_content: bool = True,
+    include_raw: bool = False,
+    include_history: bool = False,
+    history_limit: int = 10,
+) -> dict | None:
     _validate_review_area(area)
     path = _candidate_path(candidate_id, area)
     if not path.exists():
         return None
-    return _candidate_record(path, include_body=True)
+    return _candidate_record(
+        path,
+        include_body=include_content,
+        include_raw=include_raw,
+        include_history=include_history,
+        history_limit=history_limit,
+    )
 
 
-async def read_pending_record(candidate_id: str) -> dict | None:
-    return await read_review_record("pending", candidate_id)
+async def read_pending_record(candidate_id: str, **kwargs: Any) -> dict | None:
+    return await read_review_record("pending", candidate_id, **kwargs)
 
 
 def _format_value(value: Any) -> str:
@@ -682,9 +784,16 @@ def _final_fields_for_approval(
     args = meta.get("original_arguments_redacted") or {}
     if not isinstance(args, dict):
         args = {}
-    suggested_type = str(meta.get("suggested_type") or "bucket")
-    content = _section(body, "候选内容")
-    preferred_title = str(meta.get("title") or _first_heading(body, candidate_id))
+    overrides = meta.get("review_overrides")
+    if not isinstance(overrides, dict):
+        overrides = {}
+    suggested_type = str(overrides.get("suggested_type") or meta.get("suggested_type") or "bucket")
+    if _metadata_bool(overrides.get("pinned", False)):
+        suggested_type = "pinned"
+    if _metadata_bool(overrides.get("feel", False)):
+        suggested_type = "feel"
+    content = str(overrides.get("content")) if "content" in overrides and overrides.get("content") is not None else _section(body, "候选内容")
+    preferred_title = str(overrides.get("title") or meta.get("title") or _first_heading(body, candidate_id))
     title = generate_candidate_title(
         content or body,
         preferred_title=preferred_title,
@@ -696,21 +805,26 @@ def _final_fields_for_approval(
     display_time = _candidate_display_time(meta, candidate_id, src)
     display_title = _candidate_display_title(title, display_time)
 
-    raw_tags = pick_meta_arg(meta, args, "tags", [])
+    def pick_final(key: str, default: Any = None) -> Any:
+        if key in overrides and overrides.get(key) is not None:
+            return overrides.get(key)
+        return pick_meta_arg(meta, args, key, default)
+
+    raw_tags = pick_final("tags", [])
     tags = normalize_tags(raw_tags)
     domain = normalize_domain(
-        pick_meta_arg(meta, args, "domain", None),
+        pick_final("domain", None),
         default=_type_default_domain(suggested_type),
     )
-    valence = _pick_float01(meta, args, "valence", 0.5)
-    arousal = _pick_float01(meta, args, "arousal", _type_default_arousal(suggested_type))
-    importance = _clamp_importance(meta.get("suggested_importance") or args.get("importance") or 5)
-    source_bucket = str(pick_meta_arg(meta, args, "source_bucket", "") or "")
-    triggered_by = str(pick_meta_arg(meta, args, "triggered_by", source_bucket) or "")
+    valence = clamp_float01(pick_final("valence", None), 0.5)
+    arousal = clamp_float01(pick_final("arousal", None), _type_default_arousal(suggested_type))
+    importance = _clamp_importance(pick_final("importance", meta.get("suggested_importance") or args.get("importance") or 5))
+    source_bucket = str(pick_final("source_bucket", "") or "")
+    triggered_by = str(pick_final("triggered_by", source_bucket) or "")
     source_tool_default = str(meta.get("original_tool") or "review_approve")
-    source_tool = str(pick_meta_arg(meta, args, "source_tool", source_tool_default) or source_tool_default)
-    grow_batch_id = str(pick_meta_arg(meta, args, "grow_batch_id", "") or "")
-    why_remembered = str(pick_meta_arg(meta, args, "why_remembered", "") or "")
+    source_tool = str(pick_final("source_tool", source_tool_default) or source_tool_default)
+    grow_batch_id = str(pick_final("grow_batch_id", "") or "")
+    why_remembered = str(pick_final("why_remembered", "") or "")
 
     final_importance = importance
     final_tags = tags
@@ -986,104 +1100,145 @@ async def update_pending_memory(
     updates_json: str = "",
     body: str = "",
 ) -> str:
-    path = _candidate_path(candidate_id, "pending")
-    if not path.exists():
-        return f"未找到 pending 候选：{candidate_id}"
-    meta, content = _load_candidate(path)
-    updates = {}
+    overrides: dict[str, Any] = {}
+    updated_by = "mcp"
+    update_note = "update_pending_memory"
     if updates_json and updates_json.strip():
         try:
             parsed = json.loads(updates_json)
             if not isinstance(parsed, dict):
                 return "updates_json 必须是 JSON object。"
-            updates = parsed
+            updated_by = str(parsed.pop("updated_by", updated_by) or updated_by)
+            update_note = str(parsed.pop("update_note", update_note) or update_note)
+            overrides.update(parsed)
         except json.JSONDecodeError as e:
             return f"updates_json 解析失败：{e}"
-    update_notes = []
-    for key, value in updates.items():
-        if key == "suggested_importance":
-            try:
-                parsed_value = _parse_importance(value)
-            except ValueError as e:
-                return str(e)
-            clamped_value = max(1, min(10, parsed_value))
-            meta[key] = clamped_value
-            meta["review_requested_importance"] = parsed_value
-            if clamped_value != parsed_value:
-                note = (
-                    f"suggested_importance 已按合法范围从 {parsed_value} clamp 到 {clamped_value}。"
-                )
-                meta["importance_adjust_reason"] = note
-                update_notes.append(note)
-            else:
-                update_notes.append(f"suggested_importance 已更新为 {clamped_value}。")
-            continue
-        if key == "tags":
-            meta[key] = normalize_tags(value)
-            update_notes.append("tags 已 normalize 并去重。")
-            continue
-        if key == "domain":
-            meta[key] = normalize_domain(value)
-            update_notes.append("domain 已 normalize 并去重。")
-            continue
-        if key in {"valence", "arousal"}:
-            default = 0.5 if key == "valence" else 0.3
-            final = clamp_float01(value, default)
-            meta[key] = final
-            if final != value:
-                record_adjustment(meta, key, value, final, "update_pending_memory 数值合法范围 clamp")
-                update_notes.append(f"{key} 已按合法范围调整为 {final}。")
-            else:
-                update_notes.append(f"{key} 已更新为 {final}。")
-            continue
-        if key == "planned_updates":
-            if not isinstance(value, dict):
-                return "planned_updates 必须是 JSON object。"
-            clean_updates = dict(value)
-            if "tags" in clean_updates:
-                clean_updates["tags"] = normalize_tags(clean_updates["tags"])
-            if "domain" in clean_updates:
-                clean_updates["domain"] = normalize_domain(clean_updates["domain"])
-            if "importance" in clean_updates:
-                clean_updates["importance"] = _clamp_importance(clean_updates["importance"])
-            if "valence" in clean_updates:
-                clean_updates["valence"] = clamp_float01(clean_updates["valence"], 0.5)
-            if "arousal" in clean_updates:
-                clean_updates["arousal"] = clamp_float01(clean_updates["arousal"], 0.3)
-            meta[key] = clean_updates
-            update_notes.append("planned_updates 已保存。")
-            continue
-        if key in {
-            "title",
-            "source_bucket",
-            "triggered_by",
-            "source_file",
-            "source_location",
-            "source_quote",
-            "target_bucket_id",
-            "reason",
-            "notes",
-            "status",
-            "weight",
-            "related_bucket",
-            "author",
-            "date",
-            "user_name",
-            "grow_batch_id",
-            "grow_item_index",
-            "raw_importance",
-            "requested_importance",
-            "original_importance",
-        }:
-            meta[key] = value
-            update_notes.append(f"{key} 已更新。")
-            continue
-        meta[key] = value
     if body:
-        content = body
+        overrides["content"] = body
+    try:
+        result = await review_candidate_update(
+            candidate_id=candidate_id,
+            overrides=overrides,
+            updated_by=updated_by,
+            update_note=update_note,
+        )
+    except FileNotFoundError:
+        return f"未找到 pending 候选：{candidate_id}"
+    except ValueError as e:
+        return str(e)
+    return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+_ALLOWED_OVERRIDE_FIELDS = {
+    "title",
+    "content",
+    "tags",
+    "domain",
+    "importance",
+    "pinned",
+    "feel",
+    "valence",
+    "arousal",
+    "why_remembered",
+    "notes",
+    "source_bucket",
+    "triggered_by",
+    "source_tool",
+    "grow_batch_id",
+}
+
+
+def _normalize_review_overrides(overrides: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for key, value in (overrides or {}).items():
+        if key not in _ALLOWED_OVERRIDE_FIELDS:
+            continue
+        if key in {"tags"}:
+            out[key] = normalize_tags(value)
+        elif key in {"domain"}:
+            out[key] = normalize_domain(value, default=[])
+        elif key == "importance":
+            out[key] = _clamp_importance(value)
+        elif key in {"valence", "arousal"}:
+            out[key] = clamp_float01(value, 0.5 if key == "valence" else 0.3)
+        elif key in {"pinned", "feel"}:
+            out[key] = _metadata_bool(value)
+        else:
+            out[key] = value
+    return out
+
+
+def coerce_review_overrides(
+    overrides: Any = None,
+    overrides_json: Any = None,
+    flat_fields: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if isinstance(overrides, dict):
+        return dict(overrides)
+    if isinstance(overrides_json, dict):
+        return dict(overrides_json)
+    if isinstance(overrides_json, str) and overrides_json.strip():
+        parsed = json.loads(overrides_json)
+        if not isinstance(parsed, dict):
+            raise ValueError("overrides_json must be JSON object")
+        return parsed
+    out: dict[str, Any] = {}
+    for key, value in (flat_fields or {}).items():
+        if key not in _ALLOWED_OVERRIDE_FIELDS:
+            continue
+        if value is None:
+            continue
+        out[key] = value
+    return out
+
+
+async def review_candidate_update(
+    candidate_id: str,
+    overrides: dict[str, Any] | None = None,
+    updated_by: str = "owner",
+    update_note: str = "",
+) -> dict[str, Any]:
+    path = _candidate_path(candidate_id, "pending")
+    if not path.exists():
+        raise FileNotFoundError(candidate_id)
+    meta, content = _load_candidate(path)
+    clean = _normalize_review_overrides(overrides or {})
+    old_meta = dict(meta)
+    current_overrides = meta.get("review_overrides")
+    if not isinstance(current_overrides, dict):
+        current_overrides = {}
+    changed_fields: list[str] = []
+    for key, value in clean.items():
+        if current_overrides.get(key) != value:
+            current_overrides[key] = value
+            changed_fields.append(key)
+    updated_at = datetime.now().isoformat(timespec="seconds")
+    if changed_fields:
+        meta["review_overrides"] = current_overrides
+        edited = meta.get("edited_fields")
+        if not isinstance(edited, list):
+            edited = []
+        meta["edited_fields"] = list(dict.fromkeys([*edited, *changed_fields]))
+        meta["updated_at"] = updated_at
+        meta["updated_by"] = str(updated_by or "unknown")[:80]
+        _append_edit_history(
+            meta,
+            updated_at=updated_at,
+            updated_by=meta["updated_by"],
+            update_note=str(update_note or "")[:500],
+            changed_fields=changed_fields,
+            old_meta=old_meta,
+            old_content=content,
+        )
     path.write_text(_dump_candidate(meta, content), encoding="utf-8")
-    suffix = ("\n" + "\n".join(update_notes)) if update_notes else ""
-    return f"已更新 pending 候选：{candidate_id}{suffix}"
+    return {
+        "ok": True,
+        "candidate_id": candidate_id,
+        "status": "pending",
+        "updated_at": meta.get("updated_at", updated_at),
+        "updated_by": meta.get("updated_by", ""),
+        "changed_fields": changed_fields,
+    }
 
 
 async def reject_pending_memory(candidate_id: str, reason: str = "") -> str:
@@ -1121,6 +1276,68 @@ async def restore_rejected_memory(candidate_id: str) -> str:
         dst = _review_dir("pending") / f"{candidate_id}-{datetime.now().strftime('%H%M%S')}.md"
     shutil.move(str(src), str(dst))
     return f"已恢复到 pending：{candidate_id}"
+
+
+async def review_candidate_resubmit(
+    candidate_id: str,
+    overrides: dict[str, Any] | None = None,
+    resubmitted_by: str = "owner",
+    resubmit_note: str = "",
+) -> dict[str, Any]:
+    src = _candidate_path(candidate_id, "rejected")
+    if not src.exists():
+        raise FileNotFoundError(candidate_id)
+    old_meta, content = _load_candidate(src)
+    clean = _normalize_review_overrides(overrides or {})
+    new_candidate_id = _next_candidate_id()
+    now = datetime.now().isoformat(timespec="seconds")
+    new_meta = dict(old_meta)
+    new_meta["candidate_id"] = new_candidate_id
+    new_meta["status"] = "pending"
+    new_meta["created_at"] = now
+    new_meta["updated_at"] = now
+    new_meta["updated_by"] = str(resubmitted_by or "unknown")[:80]
+    new_meta["needs_user_confirmation"] = True
+    new_meta["explicitly_approved"] = False
+    new_meta["resubmitted_from"] = candidate_id
+    new_meta["resubmitted_at"] = now
+    new_meta["resubmitted_by"] = str(resubmitted_by or "unknown")[:80]
+    new_meta["resubmit_note"] = str(resubmit_note or "")[:500]
+    new_meta["parent_status"] = "rejected"
+    for key in ("rejected_at", "rejection_reason", "reject_reason", "reviewed_at", "approved_at", "approved_result", "formal_result"):
+        new_meta.pop(key, None)
+    changed_fields = list(clean.keys())
+    if clean:
+        existing_overrides = new_meta.get("review_overrides")
+        if not isinstance(existing_overrides, dict):
+            existing_overrides = {}
+        existing_overrides.update(clean)
+        new_meta["review_overrides"] = existing_overrides
+        edited = new_meta.get("edited_fields")
+        if not isinstance(edited, list):
+            edited = []
+        new_meta["edited_fields"] = list(dict.fromkeys([*edited, *changed_fields]))
+    _append_edit_history(
+        new_meta,
+        updated_at=now,
+        updated_by=str(resubmitted_by or "unknown")[:80],
+        update_note=f"resubmit: {resubmit_note or ''}".strip(),
+        changed_fields=["status", *changed_fields],
+        old_meta=old_meta,
+        old_content=content,
+    )
+    dst = _candidate_path(new_candidate_id, "pending")
+    dst.write_text(_dump_candidate(new_meta, content), encoding="utf-8")
+    return {
+        "ok": True,
+        "source_candidate_id": candidate_id,
+        "new_candidate_id": new_candidate_id,
+        "candidate_id": new_candidate_id,
+        "status": "pending",
+        "resubmitted_at": now,
+        "resubmitted_by": str(resubmitted_by or "unknown")[:80],
+        "changed_fields": changed_fields,
+    }
 
 
 def _approval_blockers(meta: dict) -> list[str]:
