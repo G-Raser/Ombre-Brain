@@ -932,6 +932,77 @@ async def journal_read(
     )
 
 
+@mcp_extra.tool()
+async def journal_update(
+    journal_id: str,
+    title: Optional[str] = None,
+    content: Optional[str] = None,
+    journal_type: Optional[str] = None,
+    tags: Optional[str] = None,
+    metadata: Optional[dict] = None,
+    updated_by: Optional[str] = "unknown",
+    update_note: Optional[str] = "",
+) -> str:
+    """修改一篇 active journal 日记。会保留 created_at，记录 updated_by/history，修改前备份原文件；不会写入普通 buckets。"""
+    async def _run() -> str:
+        kwargs = {
+            "journal_id": journal_id,
+            "updated_by": updated_by or "unknown",
+            "update_note": update_note or "",
+        }
+        if title is not None:
+            kwargs["title"] = title
+        if content is not None:
+            kwargs["content"] = content
+        if journal_type is not None:
+            kwargs["journal_type"] = journal_type
+        if tags is not None:
+            kwargs["tags"] = tags
+        if isinstance(metadata, dict):
+            kwargs["metadata"] = metadata
+        result = await _t_journal.journal_update(**kwargs)
+        return _json_lib.dumps(result, ensure_ascii=False, indent=2)
+
+    return await _with_notice(
+        _run(),
+        op="journal_update",
+        args={
+            "journal_id": journal_id,
+            "title_present": title is not None,
+            "content_len": len(content or "") if content is not None else None,
+            "journal_type": journal_type,
+            "tags": tags,
+            "updated_by": updated_by,
+        },
+    )
+
+
+@mcp_extra.tool()
+async def journal_delete(
+    journal_id: str,
+    deleted_by: Optional[str] = "unknown",
+    delete_note: Optional[str] = "",
+) -> str:
+    """Soft delete 一篇 active journal 日记：写入 deleted_at/deleted_by/delete_note/history 后移动到 buckets/journals/_trash。"""
+    async def _run() -> str:
+        result = await _t_journal.journal_delete(
+            journal_id=journal_id,
+            deleted_by=deleted_by or "unknown",
+            delete_note=delete_note or "",
+        )
+        return _json_lib.dumps(result, ensure_ascii=False, indent=2)
+
+    return await _with_notice(
+        _run(),
+        op="journal_delete",
+        args={
+            "journal_id": journal_id,
+            "deleted_by": deleted_by,
+            "delete_note_len": len(delete_note or ""),
+        },
+    )
+
+
 @mcp.tool()
 async def dream(window_hours: Optional[int] = 48) -> str:
     """读取最近 window_hours（默认 48h）内有变动的所有记忆桶,用于回顾与消化。

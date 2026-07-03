@@ -515,6 +515,39 @@ def _content_summary(content: str, limit: int = 220) -> str:
     return text[: limit - 1].rstrip() + "…"
 
 
+def _normalize_candidate_domain_value(value: Any) -> list[str]:
+    if value in (None, "", [], ()):
+        return []
+    if isinstance(value, str):
+        raw_items = value.split(",")
+    elif isinstance(value, (list, tuple, set)):
+        raw_items = value
+    else:
+        raw_items = [value]
+    out = []
+    seen = set()
+    for item in raw_items:
+        text = str(item).strip()
+        if not text or text in seen:
+            continue
+        out.append(text)
+        seen.add(text)
+    return out
+
+
+def _candidate_domain(meta: dict) -> list[str]:
+    args = meta.get("original_arguments_redacted") if isinstance(meta, dict) else {}
+    raw_frontmatter = meta.get("raw_frontmatter") if isinstance(meta, dict) else {}
+    final_fields = meta.get("final_fields") if isinstance(meta, dict) else {}
+    for source in (meta, raw_frontmatter, args, final_fields):
+        if not isinstance(source, dict) or "domain" not in source:
+            continue
+        domain = _normalize_candidate_domain_value(source.get("domain"))
+        if domain:
+            return domain
+    return []
+
+
 def _candidate_record(path: Path, include_body: bool = False) -> dict:
     meta, content = _load_candidate(path)
     cid = str(meta.get("candidate_id") or path.stem)
@@ -538,6 +571,7 @@ def _candidate_record(path: Path, include_body: bool = False) -> dict:
         "suggested_type": meta.get("suggested_type", ""),
         "suggested_importance": meta.get("suggested_importance", ""),
         "tags": meta.get("tags") or [],
+        "domain": _candidate_domain(meta),
         "created_by": meta.get("created_by", ""),
         "source_file": meta.get("source_file", ""),
         "status": meta.get("status", "pending"),

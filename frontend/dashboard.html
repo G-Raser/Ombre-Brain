@@ -189,6 +189,13 @@
         logo.src = icon.header;
         logo.alt = titleText;
       }
+      var authName = document.getElementById('auth-identity-name');
+      if (authName) authName.textContent = titleText;
+      var authLogo = document.getElementById('auth-identity-logo');
+      if (authLogo) {
+        authLogo.src = icon.header;
+        authLogo.alt = titleText;
+      }
       var favicon = document.getElementById('dashboard-favicon');
       if (favicon) {
         favicon.href = icon.favicon;
@@ -356,6 +363,7 @@
     document.addEventListener('DOMContentLoaded', function() {
       window.setStableMobileBgHeight();
       window.applyDashboardUiSettings(window.OMBRE_UI_SETTINGS);
+      if (window.applyDashboardIdentity) window.applyDashboardIdentity(window.OMBRE_UI_SETTINGS);
     });
   })();
 </script>
@@ -2778,6 +2786,70 @@
   .journal-metadata-grid .review-detail-field {
     display: contents;
   }
+  .journal-detail-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+  .journal-edit-form {
+    display: grid;
+    gap: 12px;
+  }
+  .journal-edit-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 180px;
+    gap: 10px;
+  }
+  .journal-edit-form label {
+    display: grid;
+    gap: 5px;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+  .journal-edit-form input,
+  .journal-edit-form select,
+  .journal-edit-form textarea {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .journal-edit-content {
+    min-height: 280px;
+    resize: vertical;
+    line-height: 1.72;
+  }
+  .journal-edit-note {
+    min-height: 72px;
+    resize: vertical;
+  }
+  .journal-history-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .journal-history-item {
+    padding: 9px 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface-solid);
+    color: var(--text-dim);
+    font-size: 12px;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+  }
+  .journal-danger-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .journal-delete-button {
+    color: var(--negative);
+    border-color: color-mix(in srgb, var(--negative) 35%, var(--border));
+    opacity: 0.82;
+  }
 
   @media (max-width: 768px) {
     html, body {
@@ -3068,6 +3140,28 @@
     .journal-chip {
       max-width: 100%;
       overflow-wrap: anywhere;
+    }
+    .journal-edit-grid {
+      grid-template-columns: 1fr;
+    }
+    .journal-edit-content {
+      min-height: 260px;
+    }
+    .journal-detail-toolbar,
+    .journal-edit-actions {
+      justify-content: stretch;
+    }
+    .journal-detail-toolbar button,
+    .journal-edit-actions button {
+      min-height: 40px;
+      flex: 1 1 120px;
+    }
+    .journal-danger-actions {
+      justify-content: stretch;
+    }
+    .journal-danger-actions button {
+      min-height: 40px;
+      flex: 1 1 180px;
     }
     .review-detail-section h4 {
       font-size: 15px;
@@ -3580,13 +3674,23 @@
     }
     .theme-picker {
       width: max-content;
-      max-width: 100%;
+      max-width: calc(100vw - 32px);
+    }
+    .theme-dropdown {
+      max-width: calc(100vw - 32px);
     }
     .theme-dropdown-menu {
-      left: 0;
-      right: auto;
-      width: max-content;
-      max-width: calc(100vw - 24px);
+      left: auto;
+      right: 0;
+      width: min(220px, calc(100vw - 32px));
+      max-width: calc(100vw - 32px);
+      box-sizing: border-box;
+    }
+    .theme-option {
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      white-space: normal;
     }
     .theme-picker select {
       min-width: 138px;
@@ -4056,6 +4160,41 @@
         <button onclick="clearJournalDetail()" title="关闭详情" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="x"></i> 关闭</button>
       </div>
       <div id="journal-detail" style="font-size:13px;line-height:1.75;color:var(--text);"></div>
+    </div>
+
+    <div class="config-section" id="journal-edit-panel" style="display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+        <h3 style="margin:0;">编辑日记</h3>
+        <button onclick="closeJournalEditor()" title="取消编辑" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="x"></i> 取消</button>
+      </div>
+      <div class="journal-edit-form">
+        <div class="journal-edit-grid">
+          <label>标题
+            <input id="journal-edit-title" type="text" />
+          </label>
+          <label>类型
+            <select id="journal-edit-type">
+              <option value="handoff">交接</option>
+              <option value="event">事件</option>
+              <option value="free">自由</option>
+            </select>
+          </label>
+        </div>
+        <label>标签（逗号分隔）
+          <input id="journal-edit-tags" type="text" />
+        </label>
+        <label>正文
+          <textarea id="journal-edit-content" class="journal-edit-content"></textarea>
+        </label>
+        <label>修改说明（可选）
+          <textarea id="journal-edit-note" class="journal-edit-note"></textarea>
+        </label>
+        <div class="journal-edit-actions" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+          <button class="btn-secondary" onclick="closeJournalEditor()" type="button">取消</button>
+          <button onclick="saveJournalEdit()" type="button"><i data-lucide="save"></i> 保存修改</button>
+        </div>
+        <div id="journal-edit-status" style="min-height:18px;font-size:12px;color:var(--text-dim);"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -5154,7 +5293,10 @@
 <!-- Auth Overlay -->
 <div id="auth-overlay" style="position:fixed;inset:0;z-index:9999;background:var(--bg-gradient);background-attachment:fixed;display:flex;align-items:center;justify-content:center;">
   <div style="background:var(--surface);backdrop-filter:blur(16px);border:1px solid var(--border);border-radius:24px;padding:48px 40px;max-width:400px;width:90%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.12);">
-    <h2 style="font-family:'Cormorant Garamond',serif;font-size:28px;color:var(--accent);margin-bottom:8px;">◐ Ombre Brain</h2>
+    <h2 id="auth-identity-title" style="font-family:'Cormorant Garamond',serif;font-size:28px;color:var(--accent);margin:0 0 8px;display:flex;align-items:center;justify-content:center;gap:10px;line-height:1.15;">
+      <img id="auth-identity-logo" src="/static/branding/umi-planet-a.png" alt="Umi Planet" style="width:32px;height:32px;border-radius:8px;object-fit:cover;display:inline-block;" />
+      <span id="auth-identity-name">Umi Planet</span>
+    </h2>
     <p style="color:var(--text-dim);font-size:13px;margin-bottom:28px;" id="auth-subtitle">验证身份</p>
 
     <!-- Setup form -->
@@ -5243,23 +5385,52 @@ function setHwSwitch(cbId, state) {
 // Auth system / 认证系统
 // ========================================
 async function checkAuth() {
+  const overlay = document.getElementById('auth-overlay');
+  const subtitle = document.getElementById('auth-subtitle');
+  const setupForm = document.getElementById('auth-setup-form');
+  const loginForm = document.getElementById('auth-login-form');
+  const recoveryForm = document.getElementById('auth-recovery-form');
+  const errorEl = document.getElementById('auth-error');
+  let timeoutId = null;
+  window.__dashboardAuthReady = false;
+  window.__dashboardAuthenticated = false;
   try {
-    const resp = await fetch('/auth/status');
+    if (window.applyDashboardIdentity && window.OMBRE_UI_SETTINGS) {
+      window.applyDashboardIdentity(window.OMBRE_UI_SETTINGS);
+    }
+    if (setupForm) setupForm.style.display = 'none';
+    if (loginForm) loginForm.style.display = 'none';
+    if (recoveryForm) recoveryForm.style.display = 'none';
+    if (errorEl) errorEl.style.display = 'none';
+    if (subtitle) subtitle.textContent = '验证身份';
+    if (overlay) overlay.style.display = 'flex';
+    const controller = new AbortController();
+    timeoutId = window.setTimeout(function() { controller.abort(); }, 5000);
+    const resp = await fetch('/auth/status', {cache: 'no-store', signal: controller.signal});
+    window.clearTimeout(timeoutId);
+    timeoutId = null;
+    if (!resp.ok) throw new Error('auth/status HTTP ' + resp.status);
     const data = await resp.json();
     if (data.setup_needed) {
-      document.getElementById('auth-subtitle').textContent = '首次设置';
-      document.getElementById('auth-setup-form').style.display = 'block';
+      if (subtitle) subtitle.textContent = '首次设置';
+      if (setupForm) setupForm.style.display = 'block';
+      onDashboardAuthResolved(false);
       return false;
     } else if (data.authenticated) {
-      document.getElementById('auth-overlay').style.display = 'none';
+      if (overlay) overlay.style.display = 'none';
+      onDashboardAuthResolved(true);
       return true;
     } else {
-      document.getElementById('auth-subtitle').textContent = '请输入访问密码';
-      document.getElementById('auth-login-form').style.display = 'block';
+      if (subtitle) subtitle.textContent = '请输入访问密码';
+      if (loginForm) loginForm.style.display = 'block';
+      onDashboardAuthResolved(false);
       return false;
     }
-  } catch {
-    document.getElementById('auth-overlay').style.display = 'none';
+  } catch (e) {
+    if (timeoutId) window.clearTimeout(timeoutId);
+    console.warn('[auth] status check failed; continuing without blocking dashboard', e);
+    if (overlay) overlay.style.display = 'none';
+    onDashboardAuthResolved(true);
     return true;
   }
 }
@@ -5287,6 +5458,7 @@ async function doSetup() {
     await fetch('/auth/security-question', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({question: q, answer: a}) });
   }
   document.getElementById('auth-overlay').style.display = 'none';
+  onDashboardAuthResolved(true);
 }
 
 function showLogin() {
@@ -5314,6 +5486,7 @@ async function doRecover() {
   const resp = await fetch('/auth/recover', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({answer, new_password: newPwd}) });
   if (resp.ok) {
     document.getElementById('auth-overlay').style.display = 'none';
+    onDashboardAuthResolved(true);
   } else {
     const d = await resp.json().catch(() => ({}));
     showAuthError(d.error || '验证失败');
@@ -5325,6 +5498,7 @@ async function doLogin() {
   const resp = await fetch('/auth/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({password: pwd}) });
   if (resp.ok) {
     document.getElementById('auth-overlay').style.display = 'none';
+    onDashboardAuthResolved(true);
   } else {
     const d = await resp.json().catch(() => ({}));
     showAuthError(d.detail || '密码错误');
@@ -5339,6 +5513,8 @@ async function doLogout() {
   document.getElementById('auth-subtitle').textContent = '请输入访问密码';
   document.getElementById('auth-error').style.display = 'none';
   document.getElementById('auth-overlay').style.display = 'flex';
+  window.__dashboardAuthReady = false;
+  window.__dashboardAuthenticated = false;
 }
 
 async function changePassword() {
@@ -6258,9 +6434,71 @@ function setDashboardHashForTab(target, replace) {
   }
 }
 
+window.__dashboardAuthReady = false;
+window.__dashboardAuthenticated = false;
+window.__pendingSettingsLoad = false;
+window.__currentDashboardTab = null;
+
+function safeCall(name) {
+  if (typeof window[name] === 'function') {
+    try {
+      var result = window[name]();
+      if (result && typeof result.catch === 'function') {
+        result.catch(function(e) {
+          console.warn('[settings] ' + name + ' failed', e);
+        });
+      }
+      return result;
+    } catch (e) {
+      console.warn('[settings] ' + name + ' failed', e);
+    }
+  } else {
+    console.warn('[settings] missing optional loader:', name);
+  }
+  return undefined;
+}
+window.safeCall = safeCall;
+window.callIfFunction = safeCall;
+
+function runSettingsLoaders() {
+  safeCall('loadSettingsStatus');
+  safeCall('loadHumanName');
+  safeCall('loadConfig');
+  safeCall('refreshEnvConfig');
+  safeCall('loadGithubStatus');
+  safeCall('loadSamplingSettings');
+  safeCall('loadEnvVars');
+  safeCall('loadHostVault');
+  safeCall('loadLocalEmbStatus');
+  const _mcpOriginEl = document.getElementById('mcp-local-origin');
+  if (_mcpOriginEl) _mcpOriginEl.textContent = location.origin;
+  safeCall('renderMcpUrls');
+}
+
+function maybeRunSettingsLoaders() {
+  if (window.__currentDashboardTab !== 'settings') return;
+  if (!window.__dashboardAuthReady || !window.__dashboardAuthenticated) {
+    window.__pendingSettingsLoad = true;
+    return;
+  }
+  window.__pendingSettingsLoad = false;
+  runSettingsLoaders();
+}
+
+function onDashboardAuthResolved(authenticated) {
+  window.__dashboardAuthReady = true;
+  window.__dashboardAuthenticated = !!authenticated;
+  if (authenticated && window.__pendingSettingsLoad) {
+    maybeRunSettingsLoaders();
+  }
+}
+window.runSettingsLoaders = runSettingsLoaders;
+window.onDashboardAuthResolved = onDashboardAuthResolved;
+
 function switchDashboardTab(target, options) {
   options = options || {};
   if (!document.querySelector('.tab[data-tab="' + target + '"]')) target = 'list';
+  window.__currentDashboardTab = target;
   document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
   var activeTab = document.querySelector('.tab[data-tab="' + target + '"]');
   if (activeTab) activeTab.classList.add('active');
@@ -6288,20 +6526,7 @@ function switchDashboardTab(target, options) {
   if (target === 'logs') { loadLogs(); loadOBErrors(); }
   if (target === 'v3-debug') loadV3Debug();
   if (target === 'settings') {
-      // 任务D：合并 config + settings 后，切换到「设置」时一次性加载所有面板数据
-      loadSettingsStatus();
-      loadHumanName();
-      loadConfig();
-      refreshEnvConfig();
-      loadGithubStatus();
-      loadSamplingSettings();
-      loadEnvVars();
-      loadHostVault();
-      loadLocalEmbStatus();
-      // MCP 面板同步初始化（不依赖异步请求）
-      const _mcpOriginEl = document.getElementById('mcp-local-origin');
-      if (_mcpOriginEl) _mcpOriginEl.textContent = location.origin;
-      renderMcpUrls();
+      maybeRunSettingsLoaders();
   }
   if (target === 'letters') loadLetters();
   if (target === 'anchors') loadAnchorsView();
@@ -7301,6 +7526,38 @@ function reviewTags(tags) {
   return tags.map(function(t) { return '<code style="font-size:11px;">' + esc(t) + '</code>'; }).join(' ');
 }
 
+function reviewNormalizeDomain(value) {
+  if (!value) return [];
+  var raw = Array.isArray(value) ? value : String(value).split(',');
+  var seen = {};
+  return raw.map(function(d) { return String(d || '').trim(); }).filter(function(d) {
+    if (!d || seen[d]) return false;
+    seen[d] = true;
+    return true;
+  });
+}
+
+function reviewCandidateDomain(candidate, fm) {
+  candidate = candidate || {};
+  fm = fm || {};
+  var args = candidate.original_arguments_redacted || fm.original_arguments_redacted || {};
+  var rawFm = candidate.raw_frontmatter || fm.raw_frontmatter || {};
+  var finalFields = candidate.final_fields || fm.final_fields || {};
+  return reviewNormalizeDomain(
+    candidate.domain ||
+    rawFm.domain ||
+    fm.domain ||
+    args.domain ||
+    finalFields.domain ||
+    []
+  );
+}
+
+function reviewDomain(domain) {
+  domain = reviewNormalizeDomain(domain);
+  return domain.length ? domain.map(esc).join(' / ') : '—';
+}
+
 function reviewIsHighImpact(item) {
   return REVIEW_HIGH_IMPACT_TYPES.indexOf(String(item && item.suggested_type || '')) >= 0;
 }
@@ -7347,6 +7604,9 @@ function updateReviewAreaButtons() {
 
 var journalType = '';
 var journalItems = [];
+var currentJournalDetail = null;
+var journalEditKey = '';
+var journalEditId = '';
 
 function journalTypeLabel(t) {
   if (t === 'handoff') return '交接';
@@ -7380,6 +7640,31 @@ function journalChips(items, prefix) {
   if (!Array.isArray(items) || !items.length) return '';
   return items.map(function(t) {
     return '<span class="journal-chip">' + esc((prefix || '') + t) + '</span>';
+  }).join('');
+}
+
+function journalListInput(value) {
+  return String(value || '')
+    .split(/[,，\n]+/)
+    .map(function(t) { return t.trim(); })
+    .filter(Boolean);
+}
+
+function journalHistoryHtml(history) {
+  if (!Array.isArray(history) || !history.length) {
+    return '<div class="journal-history-item">暂无修改记录。</div>';
+  }
+  return history.slice().reverse().slice(0, 8).map(function(item) {
+    var snapshot = item.previous_snapshot || {};
+    return (
+      '<div class="journal-history-item">' +
+        '<div><strong>' + esc(item.updated_by || 'unknown') + '</strong> · ' + esc((item.updated_at || '').replace('T', ' ')) + '</div>' +
+        '<div>字段：' + esc((item.changed_fields || []).join(', ') || '—') + '</div>' +
+        (item.update_note ? '<div>说明：' + esc(item.update_note) + '</div>' : '') +
+        (snapshot.title ? '<div>旧标题：' + esc(snapshot.title) + '</div>' : '') +
+        (snapshot.content_preview ? '<div>旧正文摘录：' + esc(snapshot.content_preview) + '</div>' : '') +
+      '</div>'
+    );
   }).join('');
 }
 
@@ -7443,6 +7728,7 @@ function renderJournalCard(item) {
   var id = item.journal_id || '';
   var detailKey = item.detail_key || item.relative_path || item.file_path || item.path || item.file_name || id;
   var keyArg = JSON.stringify(detailKey).replace(/"/g, '&quot;');
+  var idArg = JSON.stringify(id).replace(/"/g, '&quot;');
   var chipHtml = journalChips(item.tags, '#') + journalChips(item.domain, '· ');
   return (
     '<div class="review-card">' +
@@ -7463,6 +7749,8 @@ function renderJournalCard(item) {
         '</div>' +
         '<div class="review-card-actions">' +
           '<button onclick="loadJournalDetail(' + keyArg + ')" title="查看详情" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="eye"></i> 查看详情</button>' +
+          '<button class="btn-secondary" onclick="openJournalEditor(' + keyArg + ')" title="编辑日记" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="edit-3"></i> 编辑</button>' +
+          '<button class="btn-secondary journal-delete-button" onclick="deleteJournal(' + idArg + ')" title="移动到 _trash" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;"><i data-lucide="trash-2"></i> 删除</button>' +
         '</div>' +
       '</div>' +
     '</div>'
@@ -7512,6 +7800,9 @@ async function loadJournalDetail(detailKey) {
     var data = await readJsonSafe(resp);
     if (!data.ok) throw new Error(data.error || '读取失败');
     var j = data.journal || {};
+    currentJournalDetail = j;
+    journalEditKey = detailKey || j.detail_key || j.relative_path || j.journal_id || '';
+    var deleteArg = JSON.stringify(j.journal_id || '').replace(/"/g, '&quot;');
     var fm = j.frontmatter || {};
     var chipHtml = journalChips(j.tags, '#') + journalChips(j.domain, '· ');
     var metaRows =
@@ -7519,6 +7810,7 @@ async function loadJournalDetail(detailKey) {
       reviewField('entry_type', reviewValue(j.entry_type)) +
       reviewField('created_at', reviewValue(j.created_at)) +
       reviewField('updated_at', reviewValue(j.updated_at)) +
+      reviewField('updated_by', reviewValue(j.updated_by || '—')) +
       reviewField('author', reviewValue(j.author)) +
       reviewField('source', reviewValue(j.source)) +
       reviewField('tags', journalPills(j.tags)) +
@@ -7538,10 +7830,24 @@ async function loadJournalDetail(detailKey) {
             '<span>' + esc((j.created_at || '').slice(0, 19).replace('T', ' ')) + '</span>' +
             '<span>importance ' + esc(String(j.importance || '—')) + '</span>' +
             '<span>' + esc(j.author || 'agent') + '</span>' +
+            (j.updated_by ? '<span>updated by ' + esc(j.updated_by) + '</span>' : '') +
           '</div>' +
           (chipHtml ? '<div class="journal-tag-row">' + chipHtml + '</div>' : '') +
           '<div class="journal-body">' + journalMarkdown(j.content || '') + '</div>' +
+          '<div class="journal-detail-toolbar">' +
+            '<button class="btn-secondary" onclick="openJournalEditorFromCurrent()" title="编辑日记" style="padding:7px 12px;font-size:12px;display:inline-flex;align-items:center;gap:5px;"><i data-lucide="edit-3"></i> 编辑</button>' +
+          '</div>' +
         '</article>' +
+        '<details class="journal-metadata-details">' +
+          '<summary>修改记录 / Edit history (' + esc(String((j.history || []).length)) + ')</summary>' +
+          '<div class="journal-history-list">' + journalHistoryHtml(j.history || []) + '</div>' +
+        '</details>' +
+        '<details class="journal-metadata-details">' +
+          '<summary>危险操作 / Danger zone</summary>' +
+          '<div class="journal-danger-actions">' +
+            '<button class="btn-secondary journal-delete-button" onclick="deleteJournal(' + deleteArg + ')" title="移动到 _trash，不会永久删除" style="padding:7px 12px;font-size:12px;display:inline-flex;align-items:center;gap:5px;"><i data-lucide="trash-2"></i> 移动到 _trash</button>' +
+          '</div>' +
+        '</details>' +
         '<details class="journal-metadata-details">' +
           '<summary>元数据 / Metadata</summary>' +
           '<div class="journal-metadata-grid">' + metaRows + '</div>' +
@@ -7557,11 +7863,156 @@ async function loadJournalDetail(detailKey) {
   }
 }
 
+function fillJournalEditor(j, detailKey) {
+  var panel = document.getElementById('journal-edit-panel');
+  if (!panel || !j) return;
+  currentJournalDetail = j;
+  journalEditKey = detailKey || j.detail_key || j.relative_path || j.file_path || j.path || j.file_name || j.journal_id || '';
+  journalEditId = j.journal_id || '';
+  var title = document.getElementById('journal-edit-title');
+  var type = document.getElementById('journal-edit-type');
+  var tags = document.getElementById('journal-edit-tags');
+  var content = document.getElementById('journal-edit-content');
+  var note = document.getElementById('journal-edit-note');
+  var status = document.getElementById('journal-edit-status');
+  if (title) title.value = j.title || '';
+  if (type) type.value = ['handoff', 'event', 'free'].indexOf(j.entry_type) >= 0 ? j.entry_type : 'free';
+  if (tags) tags.value = Array.isArray(j.tags) ? j.tags.join(', ') : '';
+  if (content) content.value = j.content || '';
+  if (note) note.value = '';
+  if (status) status.textContent = '';
+  panel.style.display = '';
+  panel.scrollIntoView({behavior: 'smooth', block: 'start'});
+  if (window.lucide) lucide.createIcons();
+}
+
+async function openJournalEditor(detailKey) {
+  var key = detailKey || '';
+  if (currentJournalDetail && (key === journalEditKey || key === currentJournalDetail.journal_id || key === currentJournalDetail.relative_path)) {
+    fillJournalEditor(currentJournalDetail, key);
+    return;
+  }
+  var panel = document.getElementById('journal-edit-panel');
+  var status = document.getElementById('journal-edit-status');
+  if (panel) panel.style.display = '';
+  if (status) status.textContent = '加载日记中…';
+  try {
+    var resp = await authFetch('/api/journal-detail?key=' + encodeURIComponent(key));
+    if (!resp) return;
+    var data = await readJsonSafe(resp);
+    if (!data.ok) throw new Error(data.error || '读取失败');
+    fillJournalEditor(data.journal || {}, key);
+  } catch (e) {
+    if (status) {
+      status.style.color = 'var(--negative)';
+      status.textContent = '编辑加载失败：' + (e.message || e);
+    }
+  }
+}
+
+function openJournalEditorFromCurrent() {
+  if (!currentJournalDetail) return;
+  fillJournalEditor(currentJournalDetail, journalEditKey);
+}
+
+function closeJournalEditor() {
+  var panel = document.getElementById('journal-edit-panel');
+  var status = document.getElementById('journal-edit-status');
+  if (panel) panel.style.display = 'none';
+  if (status) {
+    status.style.color = 'var(--text-dim)';
+    status.textContent = '';
+  }
+}
+
+async function saveJournalEdit() {
+  var status = document.getElementById('journal-edit-status');
+  var title = document.getElementById('journal-edit-title');
+  var type = document.getElementById('journal-edit-type');
+  var tags = document.getElementById('journal-edit-tags');
+  var content = document.getElementById('journal-edit-content');
+  var note = document.getElementById('journal-edit-note');
+  if (!journalEditId) {
+    if (status) {
+      status.style.color = 'var(--negative)';
+      status.textContent = '找不到 journal_id，无法保存。';
+    }
+    return;
+  }
+  var payload = {
+    title: title ? title.value : '',
+    journal_type: type ? type.value : 'free',
+    tags: tags ? journalListInput(tags.value) : [],
+    content: content ? content.value : '',
+    updated_by: 'owner',
+    update_note: note ? note.value : ''
+  };
+  if (status) {
+    status.style.color = 'var(--text-dim)';
+    status.textContent = '保存中…';
+  }
+  try {
+    var resp = await authFetch('/api/journal/' + encodeURIComponent(journalEditId) + '/update', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if (!resp) return;
+    var data = await readJsonSafe(resp);
+    if (!data.ok) throw new Error(data.error || '保存失败');
+    if (status) {
+      status.style.color = 'var(--positive)';
+      status.textContent = '已保存。';
+    }
+    await loadJournals();
+    await loadJournalDetail(data.relative_path || journalEditKey || journalEditId);
+    closeJournalEditor();
+  } catch (e) {
+    if (status) {
+      status.style.color = 'var(--negative)';
+      status.textContent = '保存失败：' + (e.message || e);
+    }
+  }
+}
+
+async function deleteJournal(journalId) {
+  var jid = String(journalId || '').trim();
+  if (!jid) {
+    alert('找不到 journal_id，无法删除。');
+    return;
+  }
+  var ok = confirm('这会把这篇日记移动到 _trash，不会永久删除文件。确定继续吗？');
+  if (!ok) return;
+  var note = prompt('删除原因（可选）：', '');
+  if (note === null) return;
+  try {
+    var resp = await authFetch('/api/journal/' + encodeURIComponent(jid) + '/delete', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        deleted_by: 'owner',
+        delete_note: note || ''
+      })
+    });
+    if (!resp) return;
+    var data = await readJsonSafe(resp);
+    if (!data.ok) throw new Error(data.error || '删除失败');
+    clearJournalDetail();
+    await loadJournals();
+    alert('已移动到 _trash。');
+  } catch (e) {
+    alert('删除失败：' + (e.message || e));
+  }
+}
+
 function clearJournalDetail() {
   var panel = document.getElementById('journal-detail-panel');
   var detail = document.getElementById('journal-detail');
   if (panel) panel.style.display = 'none';
   if (detail) detail.innerHTML = '';
+  currentJournalDetail = null;
+  journalEditKey = '';
+  closeJournalEditor();
 }
 
 async function loadReviewQueue() {
@@ -7603,6 +8054,7 @@ function renderReviewCandidate(item) {
   var key = item.candidate_key || item.candidate_id || '';
   var id = item.candidate_id || key;
   var keyArg = JSON.stringify(key).replace(/"/g, '&quot;');
+  var domain = reviewCandidateDomain(item);
   var high = reviewIsHighImpact(item);
   var mismatch = item.candidate_id_mismatch
     ? '<span style="font-size:11px;color:var(--negative);">id/file mismatch</span>'
@@ -7637,11 +8089,13 @@ function renderReviewCandidate(item) {
             mismatch +
             '<span class="review-meta-pill">status: ' + reviewValue(item.status) + '</span>' +
             '<span class="review-meta-pill">type: ' + reviewValue(item.suggested_type) + '</span>' +
+            '<span class="review-meta-pill">domain: ' + reviewDomain(domain) + '</span>' +
             '<span class="review-meta-pill">importance: ' + reviewValue(item.suggested_importance) + '</span>' +
           '</div>' +
           '<div class="review-card-title">' + reviewValue(item.display_title || item.title) + '</div>' +
           '<div class="review-card-grid">' +
             reviewField('tags', reviewTags(item.tags)) +
+            reviewField('domain', reviewDomain(domain)) +
             reviewField('created_by', reviewValue(item.created_by)) +
             reviewField('source_file', reviewValue(item.source_file)) +
             lifecycleRows +
@@ -7672,12 +8126,14 @@ async function loadReviewDetail(id) {
     if (!data.ok) throw new Error(data.error || '读取失败');
     var c = data.candidate || {};
     var fm = c.frontmatter || {};
+    var domain = reviewCandidateDomain(c, fm);
     var summaryRows =
       reviewField('title', reviewValue(c.display_title || c.title || fm.title)) +
       reviewField('display_time', reviewValue(c.display_time || fm.display_time)) +
       reviewField('status', reviewValue(c.status || fm.status)) +
       reviewField('suggested_type', reviewValue(c.suggested_type || fm.suggested_type)) +
       reviewField('suggested_importance', reviewValue(c.suggested_importance || fm.suggested_importance)) +
+      reviewField('domain', reviewDomain(domain)) +
       reviewField('tags', reviewTags(c.tags || fm.tags)) +
       reviewField('created_by', reviewValue(c.created_by || fm.created_by)) +
       reviewField('created_at', reviewValue(c.created_at || fm.created_at));

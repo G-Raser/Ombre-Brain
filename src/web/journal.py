@@ -65,3 +65,68 @@ def register(mcp) -> None:
             return JSONResponse({"ok": False, "error": "journal not found"}, status_code=404)
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+    @mcp.custom_route("/api/journal/{journal_id}/update", methods=["POST"])
+    async def api_journal_update(request: Request) -> Response:
+        err = sh._require_auth(request)
+        if err:
+            return err
+        journal_id = request.path_params.get("journal_id", "")
+        try:
+            body = await request.json()
+            if not isinstance(body, dict):
+                return JSONResponse({"ok": False, "error": "request body must be a JSON object"}, status_code=400)
+            kwargs = {
+                "journal_id": journal_id,
+                "updated_by": body.get("updated_by", "owner"),
+                "update_note": body.get("update_note", ""),
+            }
+            if "title" in body:
+                kwargs["title"] = body.get("title")
+            if "content" in body:
+                kwargs["content"] = body.get("content")
+            if "journal_type" in body:
+                kwargs["journal_type"] = body.get("journal_type")
+            elif "entry_type" in body:
+                kwargs["journal_type"] = body.get("entry_type")
+            if "tags" in body:
+                kwargs["tags"] = body.get("tags")
+            if isinstance(body.get("metadata"), dict):
+                kwargs["metadata"] = body.get("metadata")
+            result = await journal_tools.journal_update(**kwargs)
+            return JSONResponse(result)
+        except FileNotFoundError as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=404)
+        except PermissionError as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=403)
+        except ValueError as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+    @mcp.custom_route("/api/journal/{journal_id}/delete", methods=["POST"])
+    async def api_journal_delete(request: Request) -> Response:
+        err = sh._require_auth(request)
+        if err:
+            return err
+        journal_id = request.path_params.get("journal_id", "")
+        try:
+            body = await request.json()
+            if body is None:
+                body = {}
+            if not isinstance(body, dict):
+                return JSONResponse({"ok": False, "error": "request body must be a JSON object"}, status_code=400)
+            result = await journal_tools.journal_delete(
+                journal_id=journal_id,
+                deleted_by=body.get("deleted_by", "owner"),
+                delete_note=body.get("delete_note", ""),
+            )
+            return JSONResponse(result)
+        except FileNotFoundError as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=404)
+        except PermissionError as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=403)
+        except ValueError as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
