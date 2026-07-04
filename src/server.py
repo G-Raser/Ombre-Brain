@@ -844,6 +844,8 @@ async def review_candidate_update(
     candidate_id: str,
     overrides: Optional[dict] = None,
     overrides_json: Optional[Any] = None,
+    suggested_type: Optional[str] = None,
+    type: Optional[str] = None,
     title: Optional[str] = None,
     content: Optional[str] = None,
     tags: Optional[str] = "",
@@ -861,6 +863,8 @@ async def review_candidate_update(
     """编辑 pending Review candidate。只写 review_overrides / edit_history，不覆盖原始 source/raw 参数。"""
     async def _run() -> str:
         flat_fields = {
+            "suggested_type": suggested_type,
+            "type": type,
             "title": title,
             "content": content,
             "importance": importance,

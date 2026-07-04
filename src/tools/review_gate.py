@@ -33,6 +33,9 @@ _DEFAULT_REVIEW_MODE = {
 }
 
 _HIGH_IMPACT_TYPES = {"I", "feel", "anchor", "pinned", "update", "delete"}
+_SUPPORTED_REVIEW_TYPES = {"bucket", "pinned", "feel", "I", "plan", "letter", "anchor", "update", "delete"}
+_REVIEW_TYPE_ALIASES = {value.lower(): value for value in _SUPPORTED_REVIEW_TYPES}
+_REVIEW_TYPE_ALIASES["i"] = "I"
 _REVIEW_AREAS = {"pending", "approved", "rejected"}
 _SECRET_PATTERNS = [
     re.compile(r"(?i)(authorization\s*:\s*)bearer\s+[A-Za-z0-9._~+/=-]+"),
@@ -41,6 +44,15 @@ _SECRET_PATTERNS = [
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.S),
     re.compile(r"(?m)^[A-Z0-9_]*(API_KEY|TOKEN|SECRET|PASSWORD)[A-Z0-9_]*=.*$"),
 ]
+
+
+def normalize_review_candidate_type(value: Any) -> str:
+    raw = str(value or "").strip()
+    normalized = _REVIEW_TYPE_ALIASES.get(raw.lower())
+    if not normalized:
+        allowed = ", ".join(sorted(_SUPPORTED_REVIEW_TYPES, key=lambda item: item.lower()))
+        raise ValueError(f"invalid suggested_type: {raw or '(empty)'}; allowed: {allowed}")
+    return normalized
 _CANDIDATE_ID_RE = re.compile(r"^candidate-\d{8}-\d{6}-[A-Za-z0-9_-]+$")
 _DEFAULT_TITLE_VALUES = {
     "hold 候选",
@@ -647,7 +659,7 @@ def _candidate_record(
         "title": title,
         "display_time": display_time,
         "display_title": display_title,
-        "suggested_type": meta.get("suggested_type", ""),
+        "suggested_type": _candidate_override(meta, "suggested_type", meta.get("suggested_type", "")),
         "suggested_importance": _candidate_override(meta, "importance", meta.get("suggested_importance", "")),
         "importance": _candidate_override(meta, "importance", meta.get("suggested_importance", "")),
         "tags": _candidate_override(meta, "tags", meta.get("tags") or []),
@@ -1183,6 +1195,8 @@ async def update_pending_memory(
 
 
 _ALLOWED_OVERRIDE_FIELDS = {
+    "suggested_type",
+    "type",
     "title",
     "content",
     "tags",
@@ -1203,13 +1217,20 @@ _ALLOWED_OVERRIDE_FIELDS = {
 
 def _normalize_review_overrides(overrides: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
-    for key, value in (overrides or {}).items():
+    raw_overrides = dict(overrides or {})
+    if "suggested_type" not in raw_overrides and "type" in raw_overrides:
+        raw_overrides["suggested_type"] = raw_overrides.get("type")
+    for key, value in raw_overrides.items():
+        if key == "type":
+            continue
         if key not in _ALLOWED_OVERRIDE_FIELDS:
             continue
         if key in {"tags"}:
             out[key] = normalize_tags(value)
         elif key in {"domain"}:
             out[key] = normalize_domain(value, default=[])
+        elif key == "suggested_type":
+            out[key] = normalize_review_candidate_type(value)
         elif key == "importance":
             out[key] = _clamp_importance(value)
         elif key in {"valence", "arousal"}:

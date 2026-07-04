@@ -141,6 +141,8 @@ def register(mcp) -> None:
             flat_fields = {
                 key: body.get(key)
                 for key in (
+                    "suggested_type",
+                    "type",
                     "title",
                     "content",
                     "tags",
