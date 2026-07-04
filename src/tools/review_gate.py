@@ -233,14 +233,7 @@ def clamp_float01(value: Any, default: float) -> float:
 
 
 def normalize_tags(value: Any) -> list[str]:
-    if value is None:
-        return []
-    if isinstance(value, str):
-        raw_items = value.split(",")
-    elif isinstance(value, (list, tuple, set)):
-        raw_items = value
-    else:
-        raw_items = [value]
+    raw_items = _string_list_items(value)
     out = []
     seen = set()
     for item in raw_items:
@@ -256,12 +249,7 @@ def normalize_domain(value: Any, default: list[str] | None = None) -> list[str]:
     fallback = list(default or ["未分类"])
     if value is None:
         return fallback
-    if isinstance(value, str):
-        raw_items = value.split(",")
-    elif isinstance(value, (list, tuple, set)):
-        raw_items = value
-    else:
-        raw_items = [value]
+    raw_items = _string_list_items(value)
     out = []
     seen = set()
     for item in raw_items:
@@ -271,6 +259,38 @@ def normalize_domain(value: Any, default: list[str] | None = None) -> list[str]:
         out.append(text)
         seen.add(text)
     return out or fallback
+
+
+def _string_list_items(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return list(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        if text.startswith("[") and text.endswith("]"):
+            try:
+                parsed = json.loads(text)
+                if isinstance(parsed, list):
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+        return re.split(r"[,，\n]+", text)
+    return [value]
+
+
+def normalize_string_list(value: Any) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in _string_list_items(value):
+        text = str(item or "").strip()
+        if not text or text in seen:
+            continue
+        out.append(text)
+        seen.add(text)
+    return out
 
 
 def pick_meta_arg(meta: dict, args: dict, key: str, default: Any = None) -> Any:
@@ -600,6 +620,7 @@ def _candidate_record(
     include_raw: bool = False,
     include_history: bool = False,
     history_limit: int = 10,
+    max_body_chars: int = 1000,
 ) -> dict:
     meta, content = _load_candidate(path)
     cid = str(meta.get("candidate_id") or path.stem)
@@ -651,6 +672,17 @@ def _candidate_record(
         "approved_at": meta.get("approved_at", ""),
     }
     if include_body:
+        max_body_chars = max(0, min(50000, int(max_body_chars or 1000)))
+        body_text = content
+        candidate_text = candidate_content
+        body_truncated = False
+        candidate_truncated = False
+        if max_body_chars and len(body_text) > max_body_chars:
+            body_text = body_text[:max_body_chars]
+            body_truncated = True
+        if max_body_chars and len(candidate_text) > max_body_chars:
+            candidate_text = candidate_text[:max_body_chars]
+            candidate_truncated = True
         record["original_tool"] = meta.get("original_tool", "")
         record["perspective"] = meta.get("perspective", "")
         record["reason"] = meta.get("reason", "")
@@ -672,9 +704,13 @@ def _candidate_record(
             }
         }
         record["frontmatter"] = frontmatter
-        record["body"] = content
-        record["candidate_content"] = candidate_content
-        record["content"] = candidate_content
+        record["body"] = body_text
+        record["body_truncated"] = body_truncated
+        record["body_length"] = len(content or "")
+        record["candidate_content"] = candidate_text
+        record["candidate_content_truncated"] = candidate_truncated
+        record["content"] = candidate_text
+        record["content_truncated"] = candidate_truncated
         record["original_arguments_summary"] = _section(content, "原始调用摘要")
         record["planned_updates_summary"] = _section(content, "计划修改字段")
         record["original_arguments_keys"] = sorted(original_args.keys()) if isinstance(original_args, dict) else []
@@ -703,10 +739,11 @@ async def read_review_record(
     area: str,
     candidate_id: str,
     *,
-    include_content: bool = True,
+    include_content: bool = False,
     include_raw: bool = False,
     include_history: bool = False,
     history_limit: int = 10,
+    max_body_chars: int = 1000,
 ) -> dict | None:
     _validate_review_area(area)
     path = _candidate_path(candidate_id, area)
@@ -718,6 +755,7 @@ async def read_review_record(
         include_raw=include_raw,
         include_history=include_history,
         history_limit=history_limit,
+        max_body_chars=max_body_chars,
     )
 
 
@@ -1088,11 +1126,26 @@ async def list_pending_memories(limit: int = 50) -> str:
     return "\n".join(lines)
 
 
-async def read_pending_memory(candidate_id: str) -> str:
+async def read_pending_memory(
+    candidate_id: str,
+    include_body: bool = False,
+    max_body_chars: int = 1000,
+    include_raw: bool = False,
+    include_history: bool = False,
+    history_limit: int = 10,
+) -> str:
     path = _candidate_path(candidate_id, "pending")
     if not path.exists():
         return f"未找到 pending 候选：{candidate_id}"
-    return path.read_text(encoding="utf-8")
+    item = _candidate_record(
+        path,
+        include_body=include_body,
+        include_raw=include_raw,
+        include_history=include_history,
+        history_limit=history_limit,
+        max_body_chars=max_body_chars,
+    )
+    return json.dumps({"ok": True, "candidate": item}, ensure_ascii=False, indent=2)
 
 
 async def update_pending_memory(
@@ -1238,6 +1291,8 @@ async def review_candidate_update(
         "updated_at": meta.get("updated_at", updated_at),
         "updated_by": meta.get("updated_by", ""),
         "changed_fields": changed_fields,
+        "content_length": len(_candidate_override(meta, "content", _section(content, "候选内容") or content) or ""),
+        "edit_history_count": len(meta.get("edit_history") or []),
     }
 
 

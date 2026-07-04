@@ -788,12 +788,32 @@ async def list_pending_memories(limit: Optional[int] = 50) -> str:
 
 
 @mcp_extra.tool()
-async def read_pending_memory(candidate_id: str) -> str:
+async def read_pending_memory(
+    candidate_id: str,
+    include_body: Optional[bool] = False,
+    max_body_chars: Optional[int] = 1000,
+    include_raw: Optional[bool] = False,
+    include_history: Optional[bool] = False,
+    history_limit: Optional[int] = 10,
+) -> str:
     """读取一条 pending 候选的完整 Markdown 内容。只读 pending，不修改正式记忆库。"""
     return await _with_notice(
-        _t_review_gate.read_pending_memory(candidate_id),
+        _t_review_gate.read_pending_memory(
+            candidate_id,
+            include_body=bool(include_body),
+            max_body_chars=max_body_chars or 1000,
+            include_raw=bool(include_raw),
+            include_history=bool(include_history),
+            history_limit=history_limit or 10,
+        ),
         op="read_pending_memory",
-        args={"candidate_id": candidate_id},
+        args={
+            "candidate_id": candidate_id,
+            "include_body": include_body,
+            "max_body_chars": max_body_chars,
+            "include_raw": include_raw,
+            "include_history": include_history,
+        },
     )
 
 
@@ -826,8 +846,8 @@ async def review_candidate_update(
     overrides_json: Optional[Any] = None,
     title: Optional[str] = None,
     content: Optional[str] = None,
-    tags: Optional[Any] = None,
-    domain: Optional[Any] = None,
+    tags: Optional[str] = "",
+    domain: Optional[str] = "",
     importance: Optional[int] = None,
     pinned: Optional[bool] = None,
     feel: Optional[bool] = None,
@@ -843,8 +863,6 @@ async def review_candidate_update(
         flat_fields = {
             "title": title,
             "content": content,
-            "tags": tags,
-            "domain": domain,
             "importance": importance,
             "pinned": pinned,
             "feel": feel,
@@ -853,6 +871,10 @@ async def review_candidate_update(
             "why_remembered": why_remembered,
             "notes": notes,
         }
+        if tags:
+            flat_fields["tags"] = tags
+        if domain:
+            flat_fields["domain"] = domain
         parsed_overrides = _t_review_gate.coerce_review_overrides(
             overrides=overrides,
             overrides_json=overrides_json,
@@ -1002,6 +1024,8 @@ async def journal_read(
     include_history: Optional[bool] = False,
     history_limit: Optional[int] = 10,
     include_trash: Optional[bool] = False,
+    include_summary: Optional[bool] = False,
+    include_history_preview: Optional[bool] = False,
 ) -> str:
     """Read journal entries. Default output is lightweight; set include_full=True to return capped content."""
     return await _with_notice(
@@ -1018,6 +1042,8 @@ async def journal_read(
             include_history=include_history if include_history is not None else False,
             history_limit=history_limit if history_limit is not None else 10,
             include_trash=include_trash if include_trash is not None else False,
+            include_summary=include_summary if include_summary is not None else False,
+            include_history_preview=include_history_preview if include_history_preview is not None else False,
         ),
         op="journal_read",
         args={
@@ -1033,6 +1059,8 @@ async def journal_read(
             "include_history": include_history,
             "history_limit": history_limit,
             "include_trash": include_trash,
+            "include_summary": include_summary,
+            "include_history_preview": include_history_preview,
         },
     )
 

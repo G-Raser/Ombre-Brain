@@ -34,6 +34,17 @@ def _review_area(value: str) -> str:
     return area
 
 
+def _include_body(request: Request) -> bool:
+    return _truthy(request.query_params.get("include_body", request.query_params.get("include_content", "")))
+
+
+def _max_body_chars(request: Request) -> int:
+    try:
+        return max(0, min(50000, int(request.query_params.get("max_body_chars", "1000"))))
+    except ValueError:
+        return 1000
+
+
 def register(mcp) -> None:
     @mcp.custom_route("/api/review/pending", methods=["GET"])
     async def api_review_pending(request: Request) -> Response:
@@ -80,10 +91,11 @@ def register(mcp) -> None:
         try:
             item = await review_gate.read_pending_record(
                 candidate_id,
-                include_content=_truthy(request.query_params.get("include_content", "true")),
+                include_content=_include_body(request),
                 include_raw=_truthy(request.query_params.get("include_raw", "")),
                 include_history=_truthy(request.query_params.get("include_history", "")),
                 history_limit=int(request.query_params.get("history_limit", "10")),
+                max_body_chars=_max_body_chars(request),
             )
             if not item:
                 return JSONResponse({"ok": False, "error": "Pending candidate not found"}, status_code=404)
@@ -102,10 +114,11 @@ def register(mcp) -> None:
             item = await review_gate.read_review_record(
                 area,
                 candidate_id,
-                include_content=_truthy(request.query_params.get("include_content", "true")),
+                include_content=_include_body(request),
                 include_raw=_truthy(request.query_params.get("include_raw", "")),
                 include_history=_truthy(request.query_params.get("include_history", "")),
                 history_limit=int(request.query_params.get("history_limit", "10")),
+                max_body_chars=_max_body_chars(request),
             )
             if not item:
                 return JSONResponse({"ok": False, "error": f"{area} candidate not found"}, status_code=404)

@@ -8225,7 +8225,7 @@ async function loadReviewDetail(id) {
   panel.style.display = '';
   detail.innerHTML = '<div class="loading">加载中…</div>';
   try {
-    var resp = await authFetch('/api/review/' + encodeURIComponent(reviewArea) + '/' + encodeURIComponent(id) + '?include_history=true&history_limit=10');
+    var resp = await authFetch('/api/review/' + encodeURIComponent(reviewArea) + '/' + encodeURIComponent(id) + '?include_body=true&max_body_chars=1000&include_history=true&history_limit=10');
     if (!resp) return;
     var data = await readJsonSafe(resp);
     if (!data.ok) throw new Error(data.error || '读取失败');
@@ -8366,7 +8366,7 @@ function fillReviewEditPanel(candidate, mode, id) {
 
 async function openReviewCandidateEditor(id, mode) {
   try {
-    var resp = await authFetch('/api/review/' + encodeURIComponent(reviewArea) + '/' + encodeURIComponent(id) + '?include_history=false');
+    var resp = await authFetch('/api/review/' + encodeURIComponent(reviewArea) + '/' + encodeURIComponent(id) + '?include_body=true&max_body_chars=4000&include_history=false');
     if (!resp) return;
     var data = await readJsonSafe(resp);
     if (!data.ok) throw new Error(data.error || '读取失败');

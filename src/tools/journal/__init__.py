@@ -24,8 +24,11 @@ DEFAULT_IMPORTANCE = 5
 MAX_INLINE_HISTORY = 20
 DEFAULT_HISTORY_RETURN = 10
 MAX_HISTORY_RETURN = 50
-MAX_CONTENT_PREVIEW = 500
-MAX_LIST_CONTENT_PREVIEW = 300
+JOURNAL_PREVIEW_CHARS = 240
+JOURNAL_HISTORY_PREVIEW_CHARS = 160
+JOURNAL_SUMMARY_CHARS = 200
+MAX_CONTENT_PREVIEW = JOURNAL_HISTORY_PREVIEW_CHARS
+MAX_LIST_CONTENT_PREVIEW = JOURNAL_PREVIEW_CHARS
 DEFAULT_FULL_CONTENT_MAX_CHARS = 4000
 MAX_FULL_CONTENT_CHARS = 20000
 JOURNAL_ID_RE = re.compile(r"^journal-\d{8}-\d{6}-\d{3}$")
@@ -320,12 +323,24 @@ def find_journal_file(identifier: str, include_trash: bool = False) -> Optional[
     return None
 
 
-def _summary(content: str, limit: int = 180) -> str:
+def _clip_preview_text(content: str, limit: int) -> str:
+    text = re.sub(r"\s+", " ", (content or "").strip())
+    limit = max(1, int(limit or 1))
+    if len(text) <= limit:
+        return text
+    if limit <= 3:
+        return text[:limit]
+    return text[: limit - 3] + "..."
+
+
+def _summary(content: str, limit: int = JOURNAL_SUMMARY_CHARS) -> str:
+    return _clip_preview_text(content, limit)
     text = re.sub(r"\s+", " ", (content or "").strip())
     return text[:limit] + ("…" if len(text) > limit else "")
 
 
-def _content_preview(content: str, limit: int = MAX_LIST_CONTENT_PREVIEW) -> str:
+def _content_preview(content: str, limit: int = JOURNAL_PREVIEW_CHARS) -> str:
+    return _clip_preview_text(content, limit)
     text = re.sub(r"\s+", " ", (content or "").strip())
     if len(text) <= limit:
         return text
@@ -347,6 +362,8 @@ def _clamp_content_max_chars(value: Any = DEFAULT_FULL_CONTENT_MAX_CHARS) -> int
         limit = int(value if value is not None else DEFAULT_FULL_CONTENT_MAX_CHARS)
     except (TypeError, ValueError):
         limit = DEFAULT_FULL_CONTENT_MAX_CHARS
+    if limit <= 0:
+        limit = DEFAULT_FULL_CONTENT_MAX_CHARS
     return max(1, min(MAX_FULL_CONTENT_CHARS, limit))
 
 
@@ -358,7 +375,8 @@ def _truncate_content(content: str, max_chars: Any = None) -> tuple[str, bool]:
     return text[:limit], len(text) > limit
 
 
-def _history_preview(content: str, limit: int = MAX_CONTENT_PREVIEW) -> str:
+def _history_preview(content: str, limit: int = JOURNAL_HISTORY_PREVIEW_CHARS) -> str:
+    return _clip_preview_text(content, limit)
     text = re.sub(r"\s+", " ", (content or "").strip())
     return text[:limit] + ("..." if len(text) > limit else "")
 
@@ -401,11 +419,14 @@ def _entry_to_result(
     history_limit: Any = DEFAULT_HISTORY_RETURN,
     content_max_chars: Any = None,
     include_frontmatter: bool = False,
+    include_summary: bool = False,
+    include_history_preview: bool = False,
 ) -> dict[str, Any]:
     meta = entry["metadata"]
     content = entry["content"]
     history = _normalize_history(meta.get("history"))
     history_count = len(history)
+    preview_source = re.sub(r"\s+", " ", (content or "").strip())
     item = {
         "journal_id": meta.get("journal_id", ""),
         "id": meta.get("journal_id", ""),
@@ -427,17 +448,20 @@ def _entry_to_result(
         "importance": meta.get("importance", DEFAULT_IMPORTANCE),
         "mood": meta.get("mood", ""),
         "status": meta.get("status", "active"),
-        "summary": _summary(content),
         "content_preview": _content_preview(content),
+        "truncated_preview": len(preview_source) > JOURNAL_PREVIEW_CHARS,
         "content_length": len(content or ""),
         "history_count": history_count,
-        "latest_history_preview": _latest_history_preview(history),
         "path": entry["path"],
         "file_path": entry["path"],
         "relative_path": _relative_path(Path(entry["path"])),
         "detail_key": _relative_path(Path(entry["path"])),
         "file_name": meta.get("file_name", ""),
     }
+    if include_summary:
+        item["summary"] = _summary(content)
+    if include_history_preview:
+        item["latest_history_preview"] = _latest_history_preview(history)
     if include_full:
         limited_content, truncated = _truncate_content(content, content_max_chars)
         item["content"] = limited_content
@@ -537,6 +561,8 @@ async def journal_read(
     include_history: Optional[bool] = False,
     history_limit: Optional[int] = DEFAULT_HISTORY_RETURN,
     include_trash: Optional[bool] = False,
+    include_summary: Optional[bool] = False,
+    include_history_preview: Optional[bool] = False,
 ) -> list[dict[str, Any]]:
     q = (query or "").strip().lower()
     kind = (entry_type or "").strip().lower()
@@ -552,6 +578,8 @@ async def journal_read(
     limited_content_chars = _clamp_content_max_chars(content_max_chars) if content_max_chars is not None else None
     with_history = bool(include_history)
     limited_history = _clamp_history_limit(history_limit)
+    with_summary = bool(include_summary)
+    with_history_preview = bool(include_history_preview)
 
     results: list[dict[str, Any]] = []
     files = _trash_journal_files() if include_trash else _safe_journal_files()
@@ -589,6 +617,8 @@ async def journal_read(
                 history_limit=limited_history,
                 content_max_chars=limited_content_chars,
                 include_frontmatter=False,
+                include_summary=with_summary,
+                include_history_preview=with_history_preview,
             )
         )
 
@@ -607,6 +637,8 @@ async def journal_read_json(**kwargs: Any) -> str:
 async def journal_list(**kwargs: Any) -> list[dict[str, Any]]:
     kwargs["include_full"] = False
     kwargs["include_history"] = False
+    kwargs["include_summary"] = False
+    kwargs["include_history_preview"] = False
     return await journal_read(**kwargs)
 
 
@@ -640,7 +672,8 @@ async def journal_read_trash_json(**kwargs: Any) -> str:
     return json.dumps({"ok": True, "journals": items, "total": len(items)}, ensure_ascii=False, indent=2)
 
 
-def _history_preview(content: str, limit: int = MAX_CONTENT_PREVIEW) -> str:
+def _history_preview(content: str, limit: int = JOURNAL_HISTORY_PREVIEW_CHARS) -> str:
+    return _clip_preview_text(content, limit)
     text = re.sub(r"\s+", " ", (content or "").strip())
     return text[:limit] + ("..." if len(text) > limit else "")
 
