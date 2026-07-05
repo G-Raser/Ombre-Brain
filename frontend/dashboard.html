@@ -1099,6 +1099,20 @@
     color: var(--text-dim);
     font-size: 11px;
   }
+  .bucket-time-filters {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+  .bucket-time-select {
+    min-height: 34px;
+    max-width: min(100%, 170px);
+    padding-right: 28px;
+    appearance: auto;
+    white-space: nowrap;
+  }
   .bucket-tag-empty { padding: 8px 4px; }
 
   .bucket-list { display: flex; flex-direction: column; gap: 8px; }
@@ -1644,6 +1658,8 @@
     /* ── Filter chips: two rows, tighter ── */
     .filters { gap: 7px; margin-bottom: 16px; }
     .filter-btn { padding: 6px 13px; font-size: 11px; }
+    .bucket-time-filters { width: 100%; }
+    .bucket-time-select { flex: 1 1 140px; max-width: 100%; min-width: 0; }
 
     /* ── Content & bucket rows ── */
     .content { padding: 16px 12px; }
@@ -6339,9 +6355,18 @@ let currentSearchResults = null;
 let selectedBucketTags = [];
 let bucketTagDropdownOpen = false;
 let bucketTagSearchQuery = '';
+let bucketTimeRange = 'all';
+let bucketTimeMode = 'updated';
 let mobileFiltersExpanded = false;
 const PRIMARY_FILTER_KEYS = new Set(['all', 'pinned', 'feel', 'unresolved', 'digested', 'archived']);
 const MOBILE_BUCKET_TAG_LIMIT = 3;
+const BUCKET_TIME_RANGE_OPTIONS = [
+  { key: 'all', label: '全部时间', hours: 0 },
+  { key: '24h', label: '最近 24 小时', hours: 24 },
+  { key: '3d', label: '最近 3 天', hours: 72 },
+  { key: '7d', label: '最近 7 天', hours: 168 },
+  { key: '30d', label: '最近 30 天', hours: 720 },
+];
 
 function toggleThemeDropdown(event) {
   if (event && event.stopPropagation) event.stopPropagation();
@@ -6833,6 +6858,56 @@ function bucketRenderSource() {
   return currentSearchResults || allBuckets;
 }
 
+function selectedBucketTimeRange() {
+  return BUCKET_TIME_RANGE_OPTIONS.find(function(item) { return item.key === bucketTimeRange; }) || BUCKET_TIME_RANGE_OPTIONS[0];
+}
+
+function renderBucketTimeFilterControls() {
+  var rangeOptions = BUCKET_TIME_RANGE_OPTIONS.map(function(item) {
+    return '<option value="' + item.key + '"' + (item.key === bucketTimeRange ? ' selected' : '') + '>' + item.label + '</option>';
+  }).join('');
+  return '<div class="bucket-time-filters">' +
+    '<select class="filter-btn bucket-time-select" data-time-range="1" aria-label="时间范围">' + rangeOptions + '</select>' +
+    '<select class="filter-btn bucket-time-select" data-time-mode="1" aria-label="时间模式">' +
+      '<option value="updated"' + (bucketTimeMode === 'updated' ? ' selected' : '') + '>最近更新</option>' +
+      '<option value="created"' + (bucketTimeMode === 'created' ? ' selected' : '') + '>最近添加</option>' +
+    '</select>' +
+  '</div>';
+}
+
+function parseBucketTime(value) {
+  if (!value) return null;
+  var parsed = Date.parse(String(value));
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function bucketTimeValue(bucket) {
+  var createdFields = ['created', 'created_at', 'last_active', 'updated_at', 'modified', 'updated'];
+  var updatedFields = ['last_active', 'updated_at', 'modified', 'updated', 'created', 'created_at'];
+  var fields = bucketTimeMode === 'created' ? createdFields : updatedFields;
+  for (var i = 0; i < fields.length; i++) {
+    var value = bucket && bucket[fields[i]];
+    var parsed = parseBucketTime(value);
+    if (parsed !== null) return { value: parsed, field: fields[i] };
+  }
+  return { value: null, field: '' };
+}
+
+function applyBucketTimeFilter(buckets) {
+  var range = selectedBucketTimeRange();
+  if (!range.hours) return buckets;
+  var cutoff = Date.now() - range.hours * 60 * 60 * 1000;
+  return (buckets || []).map(function(bucket) {
+    return { bucket: bucket, time: bucketTimeValue(bucket) };
+  }).filter(function(item) {
+    return item.time.value !== null && item.time.value >= cutoff;
+  }).sort(function(a, b) {
+    return b.time.value - a.time.value;
+  }).map(function(item) {
+    return item.bucket;
+  });
+}
+
 function renderBucketTagFilterControl(tagOptions) {
   var selectedKeys = new Set(selectedBucketTagKeys());
   var query = String(bucketTagSearchQuery || '').trim().toLowerCase();
@@ -6904,6 +6979,7 @@ function buildFilters() {
     : '');
 
   filters.insertAdjacentHTML('beforeend', renderBucketTagFilterControl(tagOptions));
+  filters.insertAdjacentHTML('beforeend', renderBucketTimeFilterControls());
   var tagSearch = document.getElementById('bucket-tag-search');
   if (tagSearch) {
     tagSearch.addEventListener('input', function(e) {
@@ -6968,6 +7044,20 @@ function buildFilters() {
     currentFilter = btn.dataset.filter;
     renderBuckets(filterBuckets(bucketRenderSource()));
   };
+  filters.onchange = function(e) {
+    var target = e.target;
+    if (target && target.matches && target.matches('[data-time-range]')) {
+      bucketTimeRange = target.value || 'all';
+      renderBuckets(filterBuckets(bucketRenderSource()));
+      buildFilters();
+      return;
+    }
+    if (target && target.matches && target.matches('[data-time-mode]')) {
+      bucketTimeMode = target.value === 'created' ? 'created' : 'updated';
+      renderBuckets(filterBuckets(bucketRenderSource()));
+      buildFilters();
+    }
+  };
   if (window.lucide) lucide.createIcons();
 }
 
@@ -6984,6 +7074,7 @@ function filterBuckets(buckets) {
   }
   var requiredTags = selectedBucketTagKeys();
   if (requiredTags.length) result = result.filter(function(b) { return bucketMatchesTags(b, requiredTags); });
+  result = applyBucketTimeFilter(result);
   return result;
 }
 

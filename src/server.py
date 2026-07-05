@@ -66,6 +66,7 @@ from tools import grow as _t_grow
 from tools import trace as _t_trace
 from tools import anchor as _t_anchor
 from tools import plan as _t_plan
+from tools import recent as _t_recent
 from tools import dream as _t_dream
 from tools import i as _t_i
 from tools import review_gate as _t_review_gate
@@ -684,12 +685,12 @@ async def release(bucket_id: str) -> str:
 
 
 @mcp_extra.tool()
-async def pulse(include_archive: Optional[bool] = False) -> str:
-    """返回记忆系统状态摘要:固化/动态/衰减/归档桶数量、总占用、衰减引擎运行状态,以及所有桶的摘要列表。include_archive=True 同时返回归档区。"""
+async def pulse(include_archive: Optional[bool] = False, include_list: Optional[bool] = False) -> str:
+    """返回记忆系统状态摘要:固化/动态/衰减/归档桶数量、总占用、衰减引擎运行状态、索引一致性,以及主题分布/核心准则/进行中计划。include_list=True 才返回全部桶的逐条列表(桶多时很长,慎用);include_archive=True 把归档区纳入统计与列表。"""
     return await _with_notice(
-        _t_anchor.pulse(include_archive=include_archive),
+        _t_anchor.pulse(include_archive=include_archive, include_list=include_list),
         op="pulse",
-        args={"include_archive": include_archive},
+        args={"include_archive": include_archive, "include_list": include_list},
     )
 
 
@@ -740,6 +741,35 @@ async def plan_read(
             "query": query, "status": status, "tags": tags, "domain": domain,
             "date_from": date_from, "date_to": date_to, "max_results": max_results,
             "include_content": include_content, "content_max_chars": content_max_chars,
+        },
+    )
+
+
+@mcp_extra.tool()
+async def recent_buckets(
+    window_days: Optional[int] = 3,
+    mode: Optional[str] = "updated",
+    query: Optional[str] = "",
+    tags: Optional[str] = "",
+    domain: Optional[str] = "",
+    bucket_type: Optional[str] = "",
+    max_results: Optional[int] = 20,
+    include_content: Optional[bool] = False,
+    content_max_chars: Optional[int] = 800,
+) -> str:
+    """Read recent formal buckets by created or updated time. Returns lightweight fields by default; include_content=True returns truncated content."""
+    return await _with_notice(
+        _t_recent.recent_buckets(
+            window_days=window_days, mode=mode, query=query, tags=tags,
+            domain=domain, bucket_type=bucket_type, max_results=max_results,
+            include_content=include_content, content_max_chars=content_max_chars,
+        ),
+        op="recent_buckets",
+        args={
+            "window_days": window_days, "mode": mode, "query": query,
+            "tags": tags, "domain": domain, "bucket_type": bucket_type,
+            "max_results": max_results, "include_content": include_content,
+            "content_max_chars": content_max_chars,
         },
     )
 

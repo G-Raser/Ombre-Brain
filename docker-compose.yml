@@ -1,0 +1,27 @@
+﻿name: cattea-memory-new
+
+services:
+  ombre-brain-new:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ombre-brain-cattea-memory-new:main
+    container_name: ombre-brain-cattea-memory-new
+    restart: unless-stopped
+    ports:
+      - "18021:8000"
+    environment:
+      - OMBRE_TRANSPORT=streamable-http
+      - OMBRE_PORT=8000
+      - OMBRE_HOST_PORT=18021
+      - OMBRE_CONFIG_PATH=/app/buckets/config.yaml
+      - OMBRE_BUCKETS_DIR=/app/buckets
+      - OMBRE_COMPRESS_API_KEY=${OMBRE_COMPRESS_API_KEY}
+      - OMBRE_COMPRESS_BASE_URL=${OMBRE_COMPRESS_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}
+      - OMBRE_COMPRESS_MODEL=${OMBRE_COMPRESS_MODEL:-gemini-3.1-flash-lite}
+      - OMBRE_EMBED_API_KEY=${OMBRE_EMBED_API_KEY:-}
+      - OMBRE_EMBED_BASE_URL=${OMBRE_EMBED_BASE_URL:-}
+      - OMBRE_EMBED_MODEL=${OMBRE_EMBED_MODEL:-}
+      - OMBRE_DASHBOARD_PASSWORD=${OMBRE_DASHBOARD_PASSWORD}
+    volumes:
+      - ./buckets:/app/buckets

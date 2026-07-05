@@ -41,6 +41,21 @@ E:\My_CatteaHome\cattea-memory-cattea
 E:\My_CatteaHome\cattea-memory-new
 ```
 
+代码布局（2026-07-05 整理后）：
+
+```text
+src/                 git 源头，改逻辑改这里；Dockerfile 只 COPY src/ 和 frontend/
+buckets/_app/src/    容器实际运行的热补丁副本（entrypoint 从镜像播种，带崩溃回滚）
+legacy_flat_layout/  上游 v2.4.0 平铺布局遗留，死代码，不要改
+backups/             所有备份统一放这里（含 app_code_backups/ 热补丁前代码备份）
+```
+
+密钥规范：
+
+- API key 只放 `.env`（OMBRE_COMPRESS_API_KEY / OMBRE_EMBED_API_KEY）。
+- `buckets/config.yaml` 及任何备份、报告、候选里不允许出现明文 key。
+- env 非空时覆盖 config 同名项（见 `src/utils.py` `_apply_env_override`）。
+
 除非主人明确要求，不要修改：
 
 ```text
@@ -66,26 +81,39 @@ E:\ProjDocs\cattea
 
 ## 2. 当前已存在的审核区
 
-项目已创建旁路审核区：
+审核区有两处，职责不同（2026-07-05 整理）：
+
+**运行时审核队列（容器实际读写的）：**
 
 ```text
-memory_review/
-memory_review/pending/
-memory_review/approved/
-memory_review/rejected/
-memory_review/reports/
-memory_review/examples/
+buckets/memory_review/pending/
+buckets/memory_review/approved/
+buckets/memory_review/rejected/
+```
+
+容器内路径为 `/app/buckets/memory_review/`。review gate 拦截的候选写到这里，
+review 工具（list/read/update/approve/reject/resubmit）也操作这里。
+
+**仓库根 memory_review/（文档与报告区，git 追踪）：**
+
+```text
 memory_review/README.md
 memory_review/PROCESS.md
 memory_review/candidate-template.md
+memory_review/examples/
+memory_review/reports/
 ```
+
+根目录的 pending/approved/rejected 只剩 `.gitkeep` 占位，是公开仓库的结构模板，
+**不是**运行时队列。旧时代（2026-06-30 ～ 07-01）残留的根目录候选已归档到
+`backups/memory_review_root_stale_20260705/`。
 
 含义：
 
 - `pending/` 是待审核记忆候选。
 - `approved/` 是已经批准候选的存档。
 - `rejected/` 是拒绝候选。
-- `reports/` 是报告。
+- `reports/` 是报告（写在仓库根 `memory_review/reports/`）。
 - `examples/` 是示例。
 
 关键原则：

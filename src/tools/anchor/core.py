@@ -12,8 +12,9 @@ pulse 顺带放在这里：它是系统状态 + 桶清单的总览，调用频�
 
 关键行为：
 - anchor_set / anchor_release：调 bucket_mgr.set_anchor，原样转译结果
-- pulse：聚合 stats + list_all，按 type 分组（normal/feel/plan/letter）
-  逐行展示 icon + 主题 + 情感 + 权重 + 标签
+- pulse：聚合 stats + list_all。默认瘦身模式只返回状态头 + 主题分布 +
+  核心准则 + active 计划（桶多时全量列表会撑爆上下文）；
+  include_list=True 才按 type 分组逐行展示 icon + 主题 + 情感 + 权重 + 标签
 - pulse 同时附带「索引漂移」自检：embedding.db 的 ID 集合与磁盘桶 ID 集合
   对账，缺失/孤儿 > 0 时在状态块顶部告警，提示运行 backfill / clean 脚本
 
@@ -84,9 +85,14 @@ async def anchor_release(bucket_id: str) -> str:
     return f"我把它从 anchor 移开了。它会重新参与默认浮现。当前 {result['count']}/{result['limit']}。"
 
 
-async def pulse(include_archive: Optional[bool] = False) -> str:
+async def pulse(
+    include_archive: Optional[bool] = False,
+    include_list: Optional[bool] = False,
+) -> str:
     if include_archive is None:
         include_archive = False
+    if include_list is None:
+        include_list = False
     await rt.decay_engine.ensure_started()
     try:
         stats = await rt.bucket_mgr.get_stats()
@@ -137,6 +143,9 @@ async def pulse(include_archive: Optional[bool] = False) -> str:
     feel_lines: list[str] = []
     plan_lines: list[str] = []
     letter_lines: list[str] = []
+    core_lines: list[str] = []          # pinned/protected/permanent（瘦身模式仍完整展示）
+    active_plan_lines: list[str] = []   # status=active 的计划（瘦身模式仍完整展示）
+    domain_counter: dict[str, int] = {}  # 普通桶按 domain 聚合（瘦身模式的"分布图"）
     for b in buckets:
         meta = b.get("metadata", {})
         btype = meta.get("type")
@@ -179,21 +188,47 @@ async def pulse(include_archive: Optional[bool] = False) -> str:
         if btype == "feel":
             feel_lines.append(line)
         elif btype == "plan":
-            plan_status = meta.get("status", "active")
+            plan_status = str(meta.get("status") or "active").strip().lower()
             plan_lines.append(line + f" [{plan_status}]")
+            if plan_status == "active":
+                active_plan_lines.append(line + " [active]")
         elif btype == "letter":
             author = meta.get("author", "?")
             letter_lines.append(line + f" [{author}]")
         else:
             normal_lines.append(line)
+            if meta.get("pinned") or meta.get("protected") or btype == "permanent":
+                core_lines.append(line)
+            elif btype != "archived":
+                for d in (meta.get("domain") or ["未分类"]):
+                    domain_counter[str(d)] = domain_counter.get(str(d), 0) + 1
 
     sections = [status]
-    if normal_lines:
-        sections.append("=== 记忆列表 ===\n" + "\n".join(normal_lines))
-    if plan_lines:
-        sections.append(f"=== 计划（{len(plan_lines)} 条）===\n" + "\n".join(plan_lines))
-    if feel_lines:
-        sections.append(f"=== feel（{len(feel_lines)} 条）===\n" + "\n".join(feel_lines))
-    if letter_lines:
-        sections.append(f"=== 信件（{len(letter_lines)} 封）===\n" + "\n".join(letter_lines))
+    if include_list:
+        if normal_lines:
+            sections.append("=== 记忆列表 ===\n" + "\n".join(normal_lines))
+        if plan_lines:
+            sections.append(f"=== 计划（{len(plan_lines)} 条）===\n" + "\n".join(plan_lines))
+        if feel_lines:
+            sections.append(f"=== feel（{len(feel_lines)} 条）===\n" + "\n".join(feel_lines))
+        if letter_lines:
+            sections.append(f"=== 信件（{len(letter_lines)} 封）===\n" + "\n".join(letter_lines))
+    else:
+        # 瘦身模式（默认）：只给脉搏，不给花名册。
+        # 桶数线性增长时全量列表会撑爆调用方上下文（311 桶时约 28KB），
+        # 所以默认只返回聚合分布 + 核心准则 + 进行中计划。
+        if domain_counter:
+            dist = "  ".join(
+                f"{d}:{n}"
+                for d, n in sorted(domain_counter.items(), key=lambda kv: -kv[1])
+            )
+            sections.append("=== 主题分布（动态桶）===\n" + dist)
+        if core_lines:
+            sections.append(f"=== 核心准则（{len(core_lines)} 条）===\n" + "\n".join(core_lines))
+        if active_plan_lines:
+            sections.append(f"=== 进行中的计划（{len(active_plan_lines)} 条）===\n" + "\n".join(active_plan_lines))
+        sections.append(
+            "（全部桶的逐条列表: pulse(include_list=True)；"
+            "最近变动: dream 或 recent_buckets；检索: breath）"
+        )
     return "\n\n".join(sections)
