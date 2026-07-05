@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -998,6 +998,108 @@
     background: var(--accent);
     box-shadow: inset 3px 3px 6px rgba(0,0,0,0.2), inset -2px -2px 4px rgba(255,255,255,0.05);
   }
+  .bucket-tag-filter {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+  .bucket-tag-filter-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 34px;
+  }
+  .bucket-tag-selected {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .bucket-tag-chip,
+  .bucket-tag-clear {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 28px;
+    padding: 4px 8px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--surface-solid);
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .bucket-tag-chip {
+    color: var(--text);
+    border-color: var(--accent-soft);
+  }
+  .bucket-tag-clear {
+    border-style: dashed;
+  }
+  .bucket-tag-menu {
+    position: absolute;
+    z-index: 40;
+    top: calc(100% + 8px);
+    left: 0;
+    width: min(360px, calc(100vw - 32px));
+    max-height: 340px;
+    overflow: auto;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-solid);
+    box-shadow: 10px 14px 28px var(--shadow-dark);
+  }
+  .bucket-tag-search {
+    width: 100%;
+    min-height: 34px;
+    margin-bottom: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    box-sizing: border-box;
+    outline: none;
+  }
+  .bucket-tag-search::placeholder { color: var(--text-dim); }
+  .bucket-tag-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    min-height: 34px;
+    margin: 3px 0;
+    padding: 7px 9px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+    box-sizing: border-box;
+  }
+  .bucket-tag-option:hover,
+  .bucket-tag-option.active {
+    border-color: var(--accent-soft);
+    background: var(--surface);
+  }
+  .bucket-tag-count,
+  .bucket-tag-empty {
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+  .bucket-tag-empty { padding: 8px 4px; }
 
   .bucket-list { display: flex; flex-direction: column; gap: 8px; }
   .bucket-row {
@@ -3763,6 +3865,31 @@
       border-radius: 7px;
       white-space: nowrap;
     }
+    .bucket-tag-filter {
+      flex: 1 1 100%;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      align-items: stretch;
+    }
+    .bucket-tag-filter-toggle {
+      width: 100%;
+      justify-content: space-between;
+      padding-inline: 12px;
+      text-align: left;
+    }
+    .bucket-tag-selected {
+      flex: 1 0 100%;
+      width: 100%;
+    }
+    .bucket-tag-menu {
+      position: static;
+      flex: 1 0 100%;
+      width: 100%;
+      max-width: 100%;
+      max-height: 280px;
+      box-sizing: border-box;
+    }
     .bucket-row-top {
       flex-wrap: wrap;
       align-items: flex-start;
@@ -3982,12 +4109,12 @@
     <input type="number" id="breath-valence" placeholder="0~1" min="0" max="1" step="0.1" style="width:80px" />
     <label>Arousal</label>
     <input type="number" id="breath-arousal" placeholder="0~1" min="0" max="1" step="0.1" style="width:80px" />
-    <button onclick="runBreathDebug()" title="模拟 Breath" style="padding:0 12px;display:inline-flex;align-items:center;gap:5px;"><i data-lucide="wind"></i> 模拟</button>
+    <button onclick="runBreathDebug()" title="真实 Breath" style="padding:0 12px;display:inline-flex;align-items:center;gap:5px;"><i data-lucide="wind"></i> 模拟</button>
   </div>
 
   <div class="breath-info" id="breath-info" style="display:none"></div>
   <div id="breath-results">
-    <div class="loading">输入 query 后点击「模拟 Breath」查看评分链路</div>
+    <div class="loading">输入 query 后点击「模拟 Breath」查看真实返回</div>
   </div>
 </div>
 
@@ -4149,6 +4276,20 @@
           </label>
           <label>importance
             <input id="review-edit-importance" type="number" min="1" max="10" />
+          </label>
+          <label>type
+            <select id="review-edit-suggested-type">
+              <option value="">不修改</option>
+              <option value="bucket">bucket</option>
+              <option value="pinned">pinned</option>
+              <option value="feel">feel</option>
+              <option value="I">I</option>
+              <option value="plan">plan</option>
+              <option value="letter">letter</option>
+              <option value="anchor">anchor</option>
+              <option value="update">update</option>
+              <option value="delete">delete</option>
+            </select>
           </label>
         </div>
         <div class="journal-edit-grid">
@@ -5969,19 +6110,18 @@ async function testSamplingBreath() {
   const out = document.getElementById('sampling-test-result');
   out.textContent = 'breath 中…';
   try {
-    const resp = await authFetch('/api/breath?n=5');
+    const resp = await authFetch('/api/test/breath', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({max_results: 5}),
+    });
     if (!resp) return;
     const d = await readJsonSafe(resp);
-    const items = (d.buckets || d.results || []).slice(0, 5);
-    if (!items.length) {
-      out.textContent = '没有候选桶（库可能是空的）';
+    if (!d.ok) {
+      out.textContent = d.error || 'breath 失败';
       return;
     }
-    out.innerHTML = '本次浮现：<br/>' + items.map((b, i) => {
-      const nm = esc(b.name || b.id || '(无名)');
-      const sc = (b.score != null) ? ' · ' + Number(b.score).toFixed(3) : '';
-      return (i + 1) + '. ' + nm + sc;
-    }).join('<br/>');
+    out.innerHTML = '<pre style="white-space:pre-wrap;margin:0;">' + esc(d.result || '') + '</pre>';
   } catch(e) {
     out.textContent = '失败: ' + e;
   }
@@ -5991,7 +6131,7 @@ async function testSamplingBreath() {
 // 工具箱 / Toolbox — 仅接「自包含、不会误伤其它配置」的真实开关
 //   · 加权采样  → /api/settings/sampling (GET/POST)
 //   · 外网访问  → /api/tunnel/{status,start,stop}
-// 动作键：试一次 breath → /api/breath；备份 → /api/github/sync
+// 动作键：试一次 breath → /api/test/breath；备份 → /api/github/sync
 // ============================================================
 function _setSwitch(swId, ledId, on) {
   var sw = document.getElementById(swId), led = document.getElementById(ledId);
@@ -6080,16 +6220,15 @@ async function toolTestBreath() {
   if (window.ObPet) ObPet.react('breath');   // 电子宠物：breath 反应
   out.textContent = 'breath 中…';
   try {
-    var resp = await authFetch('/api/breath?n=5');
+    var resp = await authFetch('/api/test/breath', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({max_results: 5}),
+    });
     if (!resp) return;
     var d = await readJsonSafe(resp);
-    var items = (d.buckets || d.results || []).slice(0, 5);
-    if (!items.length) { out.textContent = '没有候选桶（库可能是空的）'; return; }
-    out.innerHTML = '<b style="color:var(--accent)">本次浮现：</b><br>' + items.map(function (b, i) {
-      var nm = esc(b.name || b.id || '(无名)');
-      var sc = (b.score != null) ? ' · ' + Number(b.score).toFixed(3) : '';
-      return (i + 1) + '. ' + nm + sc;
-    }).join('<br>');
+    if (!d.ok) { out.textContent = d.error || 'breath 失败'; return; }
+    out.innerHTML = '<pre style="white-space:pre-wrap;margin:0;">' + esc(d.result || '') + '</pre>';
   } catch (e) { out.textContent = '失败: ' + e; }
 }
 
@@ -6196,6 +6335,10 @@ async function readJsonSafe(resp) {
 const BASE = '';
 let allBuckets = [];
 let currentFilter = 'all';
+let currentSearchResults = null;
+let selectedBucketTags = [];
+let bucketTagDropdownOpen = false;
+let bucketTagSearchQuery = '';
 let mobileFiltersExpanded = false;
 const PRIMARY_FILTER_KEYS = new Set(['all', 'pinned', 'feel', 'unresolved', 'digested', 'archived']);
 const MOBILE_BUCKET_TAG_LIMIT = 3;
@@ -6602,17 +6745,23 @@ switchDashboardTab(_initialDashboardTab, { updateHash: false });
 let searchTimer;
 document.getElementById('search-input').addEventListener('input', (e) => {
   clearTimeout(searchTimer);
-  const q = e.target.value.trim();
-  searchTimer = setTimeout(() => {
-    if (q) searchBuckets(q);
-    else renderBuckets(allBuckets);
+    const q = e.target.value.trim();
+    searchTimer = setTimeout(() => {
+      if (q) searchBuckets(q);
+      else {
+        currentSearchResults = null;
+        renderBuckets(filterBuckets(allBuckets));
+      }
   }, 300);
 });
 function doSearch() {
   clearTimeout(searchTimer);
   const q = document.getElementById('search-input').value.trim();
   if (q) searchBuckets(q);
-  else renderBuckets(allBuckets);
+  else {
+    currentSearchResults = null;
+    renderBuckets(filterBuckets(allBuckets));
+  }
 }
 
 async function loadBuckets() {
@@ -6623,9 +6772,10 @@ async function loadBuckets() {
       throw new Error((data && data.error) ? data.error : `HTTP ${res.status}`);
     }
     allBuckets = data;
+    currentSearchResults = null;
     updateStats();
     buildFilters();
-    renderBuckets(allBuckets);
+    renderBuckets(filterBuckets(allBuckets));
   } catch (e) {
     document.getElementById('bucket-list').innerHTML = '<div class="loading">加载失败: ' + e.message + '</div>';
   }
@@ -6642,9 +6792,88 @@ function updateStats() {
   updateChick(total);   // 小黄鸡蛋随记忆总数孵化长大
 }
 
+function normalizeBucketTagList(value) {
+  if (Array.isArray(value)) return value.map(function(t) { return String(t || '').trim(); }).filter(Boolean);
+  if (value == null || value === '') return [];
+  return String(value).split(/[,，\n]+/).map(function(t) { return t.trim(); }).filter(Boolean);
+}
+
+function parseBucketTagFilter(value) {
+  return normalizeBucketTagList(value).map(function(t) { return t.toLowerCase(); });
+}
+
+function collectBucketTagOptions(buckets) {
+  var map = new Map();
+  (buckets || []).forEach(function(bucket) {
+    normalizeBucketTagList(bucket && bucket.tags).forEach(function(tag) {
+      var key = tag.toLowerCase();
+      if (!key) return;
+      var item = map.get(key);
+      if (item) item.count += 1;
+      else map.set(key, { tag: tag, key: key, count: 1 });
+    });
+  });
+  return Array.from(map.values()).sort(function(a, b) {
+    if (b.count !== a.count) return b.count - a.count;
+    return a.tag.localeCompare(b.tag, 'zh-Hans-CN');
+  });
+}
+
+function selectedBucketTagKeys() {
+  return selectedBucketTags.map(function(tag) { return String(tag || '').trim().toLowerCase(); }).filter(Boolean);
+}
+
+function bucketMatchesTags(bucket, requiredTags) {
+  if (!requiredTags.length) return true;
+  var bucketTags = normalizeBucketTagList(bucket && bucket.tags).map(function(t) { return t.toLowerCase(); });
+  return requiredTags.every(function(tag) { return bucketTags.includes(tag); });
+}
+
+function bucketRenderSource() {
+  return currentSearchResults || allBuckets;
+}
+
+function renderBucketTagFilterControl(tagOptions) {
+  var selectedKeys = new Set(selectedBucketTagKeys());
+  var query = String(bucketTagSearchQuery || '').trim().toLowerCase();
+  var filtered = (tagOptions || []).filter(function(option) {
+    return !query || option.tag.toLowerCase().indexOf(query) !== -1;
+  });
+  var selectedHtml = selectedBucketTags.map(function(tag) {
+    return '<button type="button" class="bucket-tag-chip" data-tag-remove="' + esc(tag) + '">' + esc(tag) + ' ×</button>';
+  }).join('');
+  if (selectedBucketTags.length) {
+    selectedHtml += '<button type="button" class="bucket-tag-clear" data-tag-clear="1">清空 tags</button>';
+  }
+  var menuHtml = '';
+  if (bucketTagDropdownOpen) {
+    var optionHtml = filtered.length
+      ? filtered.map(function(option) {
+          var active = selectedKeys.has(option.key);
+          return '<button type="button" class="bucket-tag-option' + (active ? ' active' : '') + '" data-tag-option="' + esc(option.tag) + '">' +
+            '<span>' + esc(option.tag) + '</span><span class="bucket-tag-count">' + option.count + '</span>' +
+          '</button>';
+        }).join('')
+      : '<div class="bucket-tag-empty">' + (tagOptions.length ? '没有匹配的 tag' : '暂无 tags') + '</div>';
+    menuHtml =
+      '<div class="bucket-tag-menu">' +
+        '<input id="bucket-tag-search" class="bucket-tag-search" type="search" placeholder="搜索 tag" value="' + esc(bucketTagSearchQuery) + '" autocomplete="off">' +
+        optionHtml +
+      '</div>';
+  }
+  return '<div class="bucket-tag-filter">' +
+    '<button type="button" class="filter-btn bucket-tag-filter-toggle" data-tag-dropdown="1" aria-expanded="' + (bucketTagDropdownOpen ? 'true' : 'false') + '"' + (tagOptions.length ? '' : ' disabled') + '>' +
+      (tagOptions.length ? ('Tags' + (selectedBucketTags.length ? ' · ' + selectedBucketTags.length : '') + ' ' + (bucketTagDropdownOpen ? '▴' : '▾')) : '暂无 tags') +
+    '</button>' +
+    '<div class="bucket-tag-selected">' + selectedHtml + '</div>' +
+    menuHtml +
+  '</div>';
+}
+
 function buildFilters() {
   const domains = new Set();
   allBuckets.forEach(b => (b.domain || []).forEach(d => domains.add(d)));
+  const tagOptions = collectBucketTagOptions(allBuckets);
   const filters = document.getElementById('filters');
   if (!filters) return;
   const types = [
@@ -6674,7 +6903,58 @@ function buildFilters() {
     ? '<button type="button" class="filter-btn filter-toggle" data-filter-toggle="mobile" aria-expanded="' + (mobileFiltersExpanded ? 'true' : 'false') + '">' + (mobileFiltersExpanded ? '收起标签 ▴' : '展开更多标签 ' + extraHiddenCount + ' 个 ▾') + '</button>'
     : '');
 
+  filters.insertAdjacentHTML('beforeend', renderBucketTagFilterControl(tagOptions));
+  var tagSearch = document.getElementById('bucket-tag-search');
+  if (tagSearch) {
+    tagSearch.addEventListener('input', function(e) {
+      bucketTagSearchQuery = e.target.value || '';
+      buildFilters();
+      var nextSearch = document.getElementById('bucket-tag-search');
+      if (nextSearch) {
+        nextSearch.focus();
+        nextSearch.setSelectionRange(nextSearch.value.length, nextSearch.value.length);
+      }
+    });
+  }
+
   filters.onclick = function(e) {
+    if (e.target && e.target.closest && e.target.closest('#bucket-tag-search')) return;
+    var dropdownToggle = e.target.closest('[data-tag-dropdown]');
+    if (dropdownToggle) {
+      bucketTagDropdownOpen = !bucketTagDropdownOpen;
+      buildFilters();
+      return;
+    }
+    var tagOption = e.target.closest('[data-tag-option]');
+    if (tagOption) {
+      var tag = tagOption.getAttribute('data-tag-option') || '';
+      var key = tag.toLowerCase();
+      var selectedKeys = selectedBucketTagKeys();
+      if (selectedKeys.includes(key)) {
+        selectedBucketTags = selectedBucketTags.filter(function(item) { return item.toLowerCase() !== key; });
+      } else {
+        selectedBucketTags.push(tag);
+      }
+      renderBuckets(filterBuckets(bucketRenderSource()));
+      buildFilters();
+      return;
+    }
+    var removeTag = e.target.closest('[data-tag-remove]');
+    if (removeTag) {
+      var removeKey = String(removeTag.getAttribute('data-tag-remove') || '').toLowerCase();
+      selectedBucketTags = selectedBucketTags.filter(function(item) { return item.toLowerCase() !== removeKey; });
+      renderBuckets(filterBuckets(bucketRenderSource()));
+      buildFilters();
+      return;
+    }
+    var clearTags = e.target.closest('[data-tag-clear]');
+    if (clearTags) {
+      selectedBucketTags = [];
+      bucketTagSearchQuery = '';
+      renderBuckets(filterBuckets(bucketRenderSource()));
+      buildFilters();
+      return;
+    }
     var toggle = e.target.closest('[data-filter-toggle]');
     if (toggle) {
       mobileFiltersExpanded = !mobileFiltersExpanded;
@@ -6686,23 +6966,25 @@ function buildFilters() {
     filters.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
     btn.classList.add('active');
     currentFilter = btn.dataset.filter;
-    renderBuckets(filterBuckets(allBuckets));
+    renderBuckets(filterBuckets(bucketRenderSource()));
   };
   if (window.lucide) lucide.createIcons();
 }
 
 function filterBuckets(buckets) {
-  if (currentFilter === 'all') return buckets;
-  if (currentFilter === 'pinned') return buckets.filter(function(b) { return b.pinned; });
-  if (currentFilter === 'feel') return buckets.filter(function(b) { return b.type === 'feel'; });
-  if (currentFilter === 'unresolved') return buckets.filter(function(b) { return !b.resolved && b.type !== 'permanent' && !b.pinned; });
-  if (currentFilter === 'digested') return buckets.filter(function(b) { return b.digested; });
-  if (currentFilter === 'archived') return buckets.filter(function(b) { return b.type === 'archived' || b.score < 0.3; });
+  var result = buckets || [];
+  if (currentFilter === 'pinned') result = result.filter(function(b) { return b.pinned; });
+  else if (currentFilter === 'feel') result = result.filter(function(b) { return b.type === 'feel'; });
+  else if (currentFilter === 'unresolved') result = result.filter(function(b) { return !b.resolved && b.type !== 'permanent' && !b.pinned; });
+  else if (currentFilter === 'digested') result = result.filter(function(b) { return b.digested; });
+  else if (currentFilter === 'archived') result = result.filter(function(b) { return b.type === 'archived' || b.score < 0.3; });
   if (currentFilter.startsWith('domain:')) {
     var d = currentFilter.slice(7);
-    return buckets.filter(function(b) { return (b.domain || []).includes(d); });
+    result = result.filter(function(b) { return (b.domain || []).includes(d); });
   }
-  return buckets;
+  var requiredTags = selectedBucketTagKeys();
+  if (requiredTags.length) result = result.filter(function(b) { return bucketMatchesTags(b, requiredTags); });
+  return result;
 }
 
 function toggleBucketTags(button) {
@@ -6779,7 +7061,12 @@ async function searchBuckets(query) {
   try {
     var res = await fetch(BASE + '/api/search?q=' + encodeURIComponent(query));
     var results = await res.json();
-    renderBuckets(results);
+    var byId = new Map((allBuckets || []).map(function(b) { return [b.id, b]; }));
+    currentSearchResults = (Array.isArray(results) ? results : []).map(function(hit) {
+      var full = byId.get(hit.id);
+      return full ? Object.assign({}, full, hit) : hit;
+    });
+    renderBuckets(filterBuckets(currentSearchResults));
   } catch (e) {
     console.error('Search failed:', e);
   }
@@ -7625,6 +7912,14 @@ function reviewFieldValue(candidate, fm, key) {
   return Object.prototype.hasOwnProperty.call(candidate, key) ? candidate[key] : fm[key];
 }
 
+function reviewEffectiveContent(candidate) {
+  candidate = candidate || {};
+  if (candidate.content !== undefined && candidate.content !== null && candidate.content !== '') return candidate.content;
+  if (candidate.candidate_content !== undefined && candidate.candidate_content !== null && candidate.candidate_content !== '') return candidate.candidate_content;
+  if (candidate.content_preview !== undefined && candidate.content_preview !== null && candidate.content_preview !== '') return candidate.content_preview;
+  return candidate.body || '';
+}
+
 function reviewAreaLabel(area) {
   if (area === 'approved') return '已批准候选';
   if (area === 'rejected') return '已拒绝候选';
@@ -8225,23 +8520,30 @@ async function loadReviewDetail(id) {
   panel.style.display = '';
   detail.innerHTML = '<div class="loading">加载中…</div>';
   try {
-    var resp = await authFetch('/api/review/' + encodeURIComponent(reviewArea) + '/' + encodeURIComponent(id) + '?include_body=true&max_body_chars=1000&include_history=true&history_limit=10');
+    var resp = await authFetch('/api/review/' + encodeURIComponent(reviewArea) + '/' + encodeURIComponent(id) + '?include_body=true&max_body_chars=4000&include_history=true&history_limit=10');
     if (!resp) return;
     var data = await readJsonSafe(resp);
     if (!data.ok) throw new Error(data.error || '读取失败');
     var c = data.candidate || {};
     var fm = c.frontmatter || {};
     var domain = reviewCandidateDomain(c, fm);
+    var effectiveContent = reviewEffectiveContent(c);
     var summaryRows =
       reviewField('title', reviewValue(c.display_title || c.title || fm.title)) +
       reviewField('display_time', reviewValue(c.display_time || fm.display_time)) +
       reviewField('status', reviewValue(c.status || fm.status)) +
       reviewField('suggested_type', reviewValue(c.suggested_type || fm.suggested_type)) +
       reviewField('suggested_importance', reviewValue(c.suggested_importance || fm.suggested_importance)) +
+      reviewField('importance', reviewValue(c.importance || fm.importance)) +
       reviewField('domain', reviewDomain(domain)) +
       reviewField('tags', reviewTags(c.tags || fm.tags)) +
       reviewField('created_by', reviewValue(c.created_by || fm.created_by)) +
       reviewField('created_at', reviewValue(c.created_at || fm.created_at));
+    if (c.pinned !== undefined || fm.pinned !== undefined) summaryRows += reviewField('pinned', reviewValue(c.pinned !== undefined ? c.pinned : fm.pinned));
+    if (c.feel !== undefined || fm.feel !== undefined) summaryRows += reviewField('feel', reviewValue(c.feel !== undefined ? c.feel : fm.feel));
+    if (c.valence !== undefined || fm.valence !== undefined) summaryRows += reviewField('valence', reviewValue(c.valence !== undefined ? c.valence : fm.valence));
+    if (c.arousal !== undefined || fm.arousal !== undefined) summaryRows += reviewField('arousal', reviewValue(c.arousal !== undefined ? c.arousal : fm.arousal));
+    if (c.why_remembered || fm.why_remembered) summaryRows += reviewField('why_remembered', reviewValue(c.why_remembered || fm.why_remembered));
     if (c.updated_at || fm.updated_at) summaryRows += reviewField('updated_at', reviewValue(c.updated_at || fm.updated_at));
     if (c.updated_by || fm.updated_by) summaryRows += reviewField('updated_by', reviewValue(c.updated_by || fm.updated_by));
     if (c.resubmitted_from || fm.resubmitted_from) summaryRows += reviewField('resubmitted_from', reviewValue(c.resubmitted_from || fm.resubmitted_from));
@@ -8275,8 +8577,8 @@ async function loadReviewDetail(id) {
           highWarn +
         '</section>' +
         '<section class="review-detail-section">' +
-          '<h4>完整正文</h4>' +
-          '<pre class="review-body-pre">' + reviewValue(c.body) + '</pre>' +
+          '<h4>候选内容 / Effective content</h4>' +
+          '<pre class="review-body-pre">' + reviewValue(effectiveContent) + '</pre>' +
         '</section>' +
         '<section class="review-detail-section">' +
           '<h4>来源与审核信息</h4>' +
@@ -8289,6 +8591,10 @@ async function loadReviewDetail(id) {
         '<details class="review-raw-details">' +
           '<summary>修改记录 / Edit history</summary>' +
           '<pre>' + esc(JSON.stringify(c.edit_history || [], null, 2)) + '</pre>' +
+        '</details>' +
+        '<details class="review-raw-details">' +
+          '<summary>原始 Markdown / Raw candidate file</summary>' +
+          '<pre class="review-body-pre">' + reviewValue(c.body) + '</pre>' +
         '</details>' +
         renderReviewDetailActions(idArg) +
       '</div>';
@@ -8348,16 +8654,18 @@ function fillReviewEditPanel(candidate, mode, id) {
   if (heading) heading.textContent = mode === 'resubmit' ? '重新提交候选' : '编辑待审核候选';
   if (save) save.innerHTML = mode === 'resubmit' ? '<i data-lucide="send"></i> 重新提交' : '<i data-lucide="save"></i> 保存修改';
   var title = document.getElementById('review-edit-title');
+  var suggestedType = document.getElementById('review-edit-suggested-type');
   var importance = document.getElementById('review-edit-importance');
   var tags = document.getElementById('review-edit-tags');
   var domain = document.getElementById('review-edit-domain');
   var content = document.getElementById('review-edit-content');
   var notes = document.getElementById('review-edit-notes');
   if (title) title.value = candidate.title || '';
+  if (suggestedType) suggestedType.value = candidate.suggested_type || '';
   if (importance) importance.value = candidate.importance || candidate.suggested_importance || '';
   if (tags) tags.value = Array.isArray(candidate.tags) ? candidate.tags.join(', ') : '';
   if (domain) domain.value = Array.isArray(candidate.domain) ? candidate.domain.join(', ') : '';
-  if (content) content.value = candidate.candidate_content || candidate.content || '';
+  if (content) content.value = reviewEffectiveContent(candidate);
   if (notes) notes.value = candidate.notes || '';
   panel.style.display = '';
   panel.scrollIntoView({behavior:'smooth', block:'start'});
@@ -8379,6 +8687,7 @@ async function openReviewCandidateEditor(id, mode) {
 async function saveReviewCandidateEdit() {
   var status = document.getElementById('review-edit-status');
   var title = document.getElementById('review-edit-title');
+  var suggestedType = document.getElementById('review-edit-suggested-type');
   var importance = document.getElementById('review-edit-importance');
   var tags = document.getElementById('review-edit-tags');
   var domain = document.getElementById('review-edit-domain');
@@ -8392,6 +8701,7 @@ async function saveReviewCandidateEdit() {
     domain: domain ? journalListInput(domain.value) : [],
     notes: notes ? notes.value : ''
   };
+  if (suggestedType && suggestedType.value !== '') overrides.suggested_type = suggestedType.value;
   if (importance && importance.value !== '') overrides.importance = Number(importance.value);
   var url = reviewEditMode === 'resubmit'
     ? '/api/review/rejected/' + encodeURIComponent(reviewEditCandidateId) + '/resubmit'
@@ -8418,8 +8728,11 @@ async function saveReviewCandidateEdit() {
         ? '已重新提交为 ' + (data.new_candidate_id || data.candidate_id || '')
         : '已保存。';
     }
+    var savedMode = reviewEditMode;
+    var savedId = reviewEditCandidateId;
+    closeReviewEditPanel();
     await loadReviewQueue();
-    if (reviewEditMode === 'update') await loadReviewDetail(reviewEditCandidateId);
+    if (savedMode === 'update') await loadReviewDetail(savedId);
   } catch (e) {
     if (status) {
       status.style.color = 'var(--negative)';
@@ -8947,69 +9260,33 @@ async function runBreathDebug() {
   if (window.ObPet) ObPet.react('breath');   // 电子宠物：breath 时跳一下/破壳
   results.innerHTML = '<div class="loading">计算中…</div>';
 
-  var url = BASE + '/api/breath-debug?q=' + encodeURIComponent(query);
-  if (valence) url += '&valence=' + valence;
-  if (arousal) url += '&arousal=' + arousal;
-
   try {
-    var res = await fetch(url);
-    var data = await res.json();
-
-    document.getElementById('fs-input').classList.add('active');
-    document.getElementById('fs-cand-n').textContent = data.total_candidates + ' 桶';
-    document.getElementById('fs-candidates').classList.add('active');
-    document.getElementById('fs-scoring').classList.add('active');
-    document.getElementById('fs-thresh-n').textContent = '≥' + data.threshold + ' → ' + data.passed_count + ' 通过';
-    document.getElementById('fs-threshold').classList.add('active');
-    document.getElementById('fs-sort').classList.add('active');
-
-    var w = data.weights;
-    info.style.display = '';
-    info.innerHTML =
-      '<strong>权重配置</strong>&nbsp;' +
-      'topic=<code>' + w.topic + '</code> emotion=<code>' + w.emotion + '</code> ' +
-      'time=<code>' + w.time + '</code> importance=<code>' + w.importance + '</code>' +
-      ' &nbsp;|&nbsp; 阈值=<code>' + data.threshold + '</code>' +
-      ' &nbsp;|&nbsp; 候选=<code>' + data.total_candidates + '</code> 桶' +
-      ' → 通过=<code>' + data.passed_count + '</code> 桶' +
-      (query ? '' : ' &nbsp;|&nbsp; <em>未输入 query，topic 分数全为 0</em>');
-
-    if (!data.results.length) {
-      results.innerHTML = '<div class="loading">无结果</div>';
+    var payload = {query: query, max_results: 20};
+    if (valence) payload.valence = parseFloat(valence);
+    if (arousal) payload.arousal = parseFloat(arousal);
+    var res = await authFetch(BASE + '/api/test/breath', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if (!res) return;
+    var data = await readJsonSafe(res);
+    if (!data.ok) {
+      results.innerHTML = '<div class="loading">请求失败: ' + esc(data.error || 'breath 失败') + '</div>';
       return;
     }
 
-    var barColors = {
-      topic: '#2F4F4F',
-      emotion: '#8B6A6A',
-      time: '#9A7B4F',
-      importance: '#4A7C59',
-    };
+    document.getElementById('fs-input').classList.add('active');
+    document.getElementById('fs-cand-n').textContent = 'dispatch';
+    document.getElementById('fs-candidates').classList.add('active');
+    document.getElementById('fs-scoring').classList.add('active');
+    document.getElementById('fs-thresh-n').textContent = '真实返回';
+    document.getElementById('fs-threshold').classList.add('active');
+    document.getElementById('fs-sort').classList.add('active');
 
-    results.innerHTML = data.results.map(function(r, i) {
-      var s = r.scores;
-      var passed = r.passed_threshold;
-      var iconName = r.pinned ? 'pin' : r.resolved ? 'moon' : r.type === 'feel' ? 'droplet' : 'message-circle';
-      var icon = '<i data-lucide="' + iconName + '"></i>';
-      var bars = Object.entries(s).map(function(entry) {
-        var key = entry[0], val = entry[1];
-        var pct = Math.round(val * 100);
-        var wt = r.weights[key];
-        return '<div class="score-bar-group">' +
-          '<div class="score-bar-label"><span>' + key + '×' + wt + '</span><span>' + val.toFixed(2) + '</span></div>' +
-          '<div class="score-bar-track">' +
-            '<div class="score-bar-fill" style="width:' + pct + '%;background:' + barColors[key] + '"></div>' +
-          '</div>' +
-        '</div>';
-      }).join('');
-
-      return '<div class="score-row" title="' + esc(r.name) + '">' +
-        '<span class="rank">' + (i < 9 ? '0' : '') + (i + 1) + '</span>' +
-        '<span class="name">' + icon + ' ' + esc(r.name) + '</span>' +
-        '<div class="score-bars">' + bars + '</div>' +
-        '<span class="score-final ' + (passed ? 'score-pass' : 'score-fail') + '">' + r.normalized.toFixed(1) + (r.resolved ? '<small>×0.3</small>' : '') + '</span>' +
-      '</div>';
-    }).join('');
+    info.style.display = '';
+    info.innerHTML = '<strong>source</strong>&nbsp;<code>' + esc(data.source || 'tools.breath.dispatch') + '</code>';
+    results.innerHTML = '<pre style="white-space:pre-wrap;margin:0;">' + esc(data.result || '') + '</pre>';
   } catch (e) {
     results.innerHTML = '<div class="loading">请求失败: ' + e.message + '</div>';
   }
@@ -11555,7 +11832,7 @@ function enterPurgeMode() {
   _purgeMode = true;
   var tb = document.getElementById('purge-toolbar');
   if (tb) { tb.style.display = 'flex'; }
-  renderBuckets(allBuckets || []);
+  renderBuckets(filterBuckets(bucketRenderSource()));
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -11563,7 +11840,7 @@ function exitPurgeMode() {
   _purgeMode = false;
   var tb = document.getElementById('purge-toolbar');
   if (tb) { tb.style.display = 'none'; }
-  renderBuckets(allBuckets || []);
+  renderBuckets(filterBuckets(bucketRenderSource()));
 }
 
 function purgeToggleRow(row) {
@@ -11935,4 +12212,5 @@ function renderSelfEntries() {
 
 </body>
 </html>
+
 

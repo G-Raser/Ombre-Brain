@@ -27,6 +27,7 @@ import random
 
 from .. import _runtime as rt
 from utils import strip_wikilinks, count_tokens_approx
+from .plans import format_active_plans_block
 
 
 def _bucket_has_tags(meta: dict, tag_filter: list) -> bool:
@@ -45,6 +46,11 @@ async def surface_search(
     arousal: float,
     tag_filter: list,
 ) -> str:
+    related_plans_block = await format_active_plans_block(
+        title="=== 相关 active plans ===",
+        query=query,
+        tag_filter=tag_filter,
+    )
     domain_filter = [d.strip() for d in domain.split(",") if d.strip()] or None
     q_valence = valence if 0 <= valence <= 1 else None
     q_arousal = arousal if 0 <= arousal <= 1 else None
@@ -148,12 +154,16 @@ async def surface_search(
     if not results:
         if rt.fire_webhook:
             await rt.fire_webhook("breath", {"mode": "empty", "matches": 0})
+        if related_plans_block:
+            return related_plans_block
         return (
             f"没有匹配到「{query}」相关的记忆。\n"
             "可以换个关键词试试，或不带 query 看当下权重池；feel 用 breath(domain=\"feel\")，信件用 letter_read。"
         )
 
     final_text = "\n---\n".join(results)
+    if related_plans_block:
+        final_text = final_text.rstrip() + "\n\n" + related_plans_block
     if rt.fire_webhook:
         await rt.fire_webhook("breath", {"mode": "ok", "matches": len(matches), "chars": len(final_text)})
     return final_text

@@ -664,6 +664,11 @@ def _candidate_record(
         "importance": _candidate_override(meta, "importance", meta.get("suggested_importance", "")),
         "tags": _candidate_override(meta, "tags", meta.get("tags") or []),
         "domain": _candidate_override(meta, "domain", _candidate_domain(meta)),
+        "pinned": _candidate_override(meta, "pinned", meta.get("pinned", False)),
+        "feel": _candidate_override(meta, "feel", meta.get("feel", False)),
+        "valence": _candidate_override(meta, "valence", meta.get("valence", "")),
+        "arousal": _candidate_override(meta, "arousal", meta.get("arousal", "")),
+        "why_remembered": _candidate_override(meta, "why_remembered", meta.get("why_remembered", "")),
         "created_by": meta.get("created_by", ""),
         "source_file": meta.get("source_file", ""),
         "status": meta.get("status", "pending"),
@@ -1531,6 +1536,10 @@ async def approve_pending_memory(candidate_id: str, dry_run: bool = True, confir
         await rt.bucket_mgr.update(bucket_id, dont_surface=True)
     elif suggested_type == "plan":
         weight = clamp_float01(pick_meta_arg(meta, args, "weight", 0.5), 0.5)
+        from .plan.status import normalize_plan_status_for_formal
+        formal_status = normalize_plan_status_for_formal(
+            pick_meta_arg(meta, args, "status", "active")
+        )
         bucket_id = await rt.bucket_mgr.create(
             content=content,
             tags=fields["tags"],
@@ -1546,12 +1555,12 @@ async def approve_pending_memory(candidate_id: str, dry_run: bool = True, confir
         )
         try:
             from ._common import append_plan_change_log
-            initial_log = append_plan_change_log([], "created", to=str(pick_meta_arg(meta, args, "status", "active") or "active"))
+            initial_log = append_plan_change_log([], "created", to=formal_status)
         except Exception:
             initial_log = []
         await rt.bucket_mgr.update(
             bucket_id,
-            status=str(pick_meta_arg(meta, args, "status", "active") or "active"),
+            status=formal_status,
             related_bucket=str(pick_meta_arg(meta, args, "related_bucket", "") or ""),
             change_log=initial_log,
         )

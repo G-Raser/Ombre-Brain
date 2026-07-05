@@ -32,6 +32,15 @@ from .feel import surface_feels
 from .importance import surface_by_importance
 from .surface import surface_default
 from .search import surface_search
+from .plans import format_active_plans_block
+
+
+def _append_optional_block(body: str, block: str) -> str:
+    if not block:
+        return body
+    if not body:
+        return block
+    return body.rstrip() + "\n\n" + block
 
 
 async def dispatch(
@@ -74,6 +83,14 @@ async def dispatch(
         domain = "feel"
         tag_filter = [t for t in tag_filter if t not in ("feel", "__feel__")]
 
+    if domain.strip().lower() == "plan":
+        block = await format_active_plans_block(
+            title="=== active plans ===",
+            tag_filter=tag_filter,
+        )
+        note = "plan 是特殊通道；如需完整计划列表，请使用 plan_read。"
+        return _append_optional_block(block or "没有 active plans。", note)
+
     # --- Feel 通道优先：即使无 query 也直接拉 feel ---
     if domain.strip().lower() == "feel":
         return await surface_feels(max_tokens=max_tokens)
@@ -88,11 +105,16 @@ async def dispatch(
 
     # --- 无 query：浮现模式 ---
     if not query or not query.strip():
-        return await surface_default(
+        body = await surface_default(
             max_results=max_results,
             max_tokens=max_tokens,
             tag_filter=tag_filter,
         )
+        block = await format_active_plans_block(
+            title="=== 顺手想起的 active plans ===",
+            tag_filter=tag_filter,
+        )
+        return _append_optional_block(body, block)
 
     # --- 有 query：检索模式 ---
     return await surface_search(

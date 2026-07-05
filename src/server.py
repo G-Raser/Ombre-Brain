@@ -717,6 +717,34 @@ async def plan(
 
 
 @mcp_extra.tool()
+async def plan_read(
+    query: Optional[str] = "",
+    status: Optional[str] = "active",
+    tags: Optional[str] = "",
+    domain: Optional[str] = "",
+    date_from: Optional[str] = "",
+    date_to: Optional[str] = "",
+    max_results: Optional[int] = 20,
+    include_content: Optional[bool] = False,
+    content_max_chars: Optional[int] = 800,
+) -> str:
+    """Read type=plan buckets. plan does not participate in normal breath; use plan_read for plan queries. dream only shows active plans at the end and is not for precise lookup."""
+    return await _with_notice(
+        _t_plan.plan_read(
+            query=query, status=status, tags=tags, domain=domain,
+            date_from=date_from, date_to=date_to, max_results=max_results,
+            include_content=include_content, content_max_chars=content_max_chars,
+        ),
+        op="plan_read",
+        args={
+            "query": query, "status": status, "tags": tags, "domain": domain,
+            "date_from": date_from, "date_to": date_to, "max_results": max_results,
+            "include_content": include_content, "content_max_chars": content_max_chars,
+        },
+    )
+
+
+@mcp_extra.tool()
 async def letter_write(
     author: str,
     content: str,

@@ -24,10 +24,12 @@ breath 中。
 ========================================
 """
 
+import json
 from typing import Optional
 
 from .. import _runtime as rt
 from ..review_gate import create_pending_candidate, pending_response, review_mode_enabled
+from .status import normalize_plan_status_for_formal
 from utils import strip_wikilinks, get_ai_name
 
 
@@ -47,9 +49,7 @@ async def plan_create(
     await rt.decay_engine.ensure_started()
     if not content or not content.strip():
         return "内容为空，无法登记计划。"
-    status = status.strip().lower()
-    if status not in ("active", "resolved", "abandoned"):
-        status = "active"
+    status = normalize_plan_status_for_formal(status)
 
     if review_mode_enabled("intercept_plan"):
         candidate = await create_pending_candidate(
@@ -112,6 +112,168 @@ async def plan_create(
     except Exception:
         pass
     return f"📋plan→{bucket_id} [{status}]"
+
+
+async def plan_read(
+    query: Optional[str] = "",
+    status: Optional[str] = "active",
+    tags: Optional[str] = "",
+    domain: Optional[str] = "",
+    date_from: Optional[str] = "",
+    date_to: Optional[str] = "",
+    max_results: Optional[int] = 20,
+    include_content: Optional[bool] = False,
+    content_max_chars: Optional[int] = 800,
+) -> str:
+    if query is None: query = ""
+    if status is None: status = "active"
+    if tags is None: tags = ""
+    if domain is None: domain = ""
+    if date_from is None: date_from = ""
+    if date_to is None: date_to = ""
+    if max_results is None: max_results = 20
+    if include_content is None: include_content = False
+    if content_max_chars is None: content_max_chars = 800
+
+    status_norm = str(status).strip().lower() or "active"
+    if status_norm not in ("active", "resolved", "abandoned", "all"):
+        status_norm = "active"
+    max_results = max(1, min(100, int(max_results)))
+    content_max_chars = max(1, min(8000, int(content_max_chars)))
+
+    query_text = str(query).strip().lower()
+    required_tags = [t.strip() for t in str(tags).split(",") if t.strip()]
+    domain_filter = str(domain).strip()
+
+    start = str(date_from).strip()
+    end = str(date_to).strip()
+    if len(start) == 10:
+        start = f"{start}T00:00:00"
+    if len(end) == 10:
+        end = f"{end}T23:59:59"
+
+    try:
+        all_buckets = await rt.bucket_mgr.list_all(include_archive=False)
+    except Exception as e:
+        return json.dumps({"ok": False, "error": f"plan_read failed: {e}"}, ensure_ascii=False)
+
+    def _status(meta: dict) -> str:
+        raw = str(meta.get("status") or "active").strip().lower()
+        if raw in ("resolved", "abandoned"):
+            return raw
+        return "active"
+
+    def _created(meta: dict) -> str:
+        return str(meta.get("created") or meta.get("created_at") or "")
+
+    def _updated(meta: dict) -> str:
+        return str(
+            meta.get("updated")
+            or meta.get("updated_at")
+            or meta.get("last_active")
+            or meta.get("created")
+            or meta.get("created_at")
+            or ""
+        )
+
+    def _domains(meta: dict) -> list[str]:
+        value = meta.get("domain") or []
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, list):
+            return [str(v) for v in value]
+        return []
+
+    def _tags(meta: dict) -> list[str]:
+        value = meta.get("tags") or []
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, list):
+            return [str(v) for v in value]
+        return []
+
+    def _matches_query(bucket: dict, meta: dict, tag_list: list[str]) -> bool:
+        if not query_text:
+            return True
+        parts = [
+            str(bucket.get("content") or ""),
+            str(meta.get("name") or ""),
+            str(meta.get("title") or ""),
+            str(meta.get("related_bucket") or ""),
+            str(meta.get("why_remembered") or ""),
+            " ".join(tag_list),
+        ]
+        return query_text in "\n".join(parts).lower()
+
+    def _preview(content: str) -> str:
+        text = " ".join(strip_wikilinks(content).split())
+        if len(text) <= 240:
+            return text
+        return text[:240].rstrip() + "..."
+
+    plans = []
+    for bucket in all_buckets:
+        meta = bucket.get("metadata", {})
+        if meta.get("type") != "plan":
+            continue
+
+        st = _status(meta)
+        if status_norm != "all" and st != status_norm:
+            continue
+        if status_norm == "all" and st not in ("active", "resolved", "abandoned"):
+            continue
+
+        tag_list = _tags(meta)
+        tag_set = set(tag_list)
+        if required_tags and not all(t in tag_set for t in required_tags):
+            continue
+
+        domain_list = _domains(meta)
+        if domain_filter and domain_filter not in domain_list:
+            continue
+
+        created = _created(meta)
+        if start and created and created < start:
+            continue
+        if end and created and created > end:
+            continue
+
+        if not _matches_query(bucket, meta, tag_list):
+            continue
+
+        content = str(bucket.get("content") or "")
+        item = {
+            "bucket_id": bucket.get("id") or meta.get("id") or "",
+            "title": meta.get("title") or meta.get("name") or "",
+            "status": st,
+            "created": created,
+            "updated": _updated(meta),
+            "weight": meta.get("weight", 0.5),
+            "related_bucket": meta.get("related_bucket") or "",
+            "tags": tag_list,
+            "content_preview": _preview(content),
+            "content_length": len(content),
+        }
+        if include_content:
+            item["content"] = strip_wikilinks(content)[:content_max_chars]
+        plans.append(item)
+
+    plans.sort(key=lambda p: p.get("updated") or p.get("created") or "", reverse=True)
+    plans = plans[:max_results]
+    return json.dumps(
+        {
+            "ok": True,
+            "query": str(query).strip(),
+            "status": status_norm,
+            "count": len(plans),
+            "max_results": max_results,
+            "include_content": bool(include_content),
+            "content_max_chars": content_max_chars if include_content else 0,
+            "results": plans,
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
 
 
 async def letter_write(

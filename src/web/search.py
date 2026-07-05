@@ -6,7 +6,8 @@ web/search.py — 检索 / 重复 / 概念网络 / breath 调试
 - /api/search：关键词+向量检索
 - /api/duplicates：重复候选 pair（记忆健康面板）
 - /api/network：概念网络图（wikilink + tag 共现）
-- /api/breath、/api/breath-debug：breath 浮现结果 / 四维评分分解
+- /api/test/breath：同源调用 tools.breath.dispatch，供 Dashboard 检查真实 breath
+- /api/breath、/api/breath-debug：旧版轻量评分/评分分解接口（保留兼容）
 
 对外暴露：register(mcp)。
 ========================================
@@ -26,6 +27,52 @@ except ImportError:  # pragma: no cover
 
 
 def register(mcp) -> None:
+
+    @mcp.custom_route("/api/test/breath", methods=["POST"])
+    async def api_test_breath(request: Request) -> Response:
+        """Return the real tools.breath.dispatch output for Dashboard checks."""
+        from starlette.responses import JSONResponse
+        err = sh._require_auth(request)
+        if err:
+            return err
+        try:
+            try:
+                body = await request.json()
+            except Exception:
+                body = {}
+            if not isinstance(body, dict):
+                return JSONResponse({"ok": False, "error": "request body must be JSON object"}, status_code=400)
+
+            def _as_int(name: str, default: int) -> int:
+                try:
+                    return int(body.get(name, default))
+                except (TypeError, ValueError):
+                    return default
+
+            def _as_float(name: str, default: float) -> float:
+                try:
+                    return float(body.get(name, default))
+                except (TypeError, ValueError):
+                    return default
+
+            from tools import breath as _t_breath
+            result = await _t_breath.dispatch(
+                query=str(body.get("query") or ""),
+                max_tokens=_as_int("max_tokens", 0),
+                domain=str(body.get("domain") or ""),
+                valence=_as_float("valence", -1),
+                arousal=_as_float("arousal", -1),
+                max_results=_as_int("max_results", 0),
+                importance_min=_as_int("importance_min", -1),
+                tags=str(body.get("tags") or ""),
+            )
+            return JSONResponse({
+                "ok": True,
+                "source": "tools.breath.dispatch",
+                "result": result,
+            })
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
     @mcp.custom_route("/api/search", methods=["GET"])
     async def api_search(request: Request) -> Response:

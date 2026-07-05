@@ -128,10 +128,22 @@ def register(mcp) -> None:
                 parts.append(summary)
                 token_budget -= summary_tokens
 
-            if not parts:
+            plan_block = ""
+            try:
+                from tools.breath.plans import format_active_plans_from_buckets
+                plan_block = format_active_plans_from_buckets(
+                    all_buckets,
+                    title="=== 顺手想起的 active plans ===",
+                )
+            except Exception as e:
+                logger.warning(f"breath_hook active plans section failed: {e}")
+
+            if not parts and not plan_block:
                 await sh.fire_webhook("breath_hook", {"surfaced": 0})
                 return PlainTextResponse("")
             body_text = "[Ombre Brain - 记忆浮现]\n" + "\n---\n".join(parts)
+            if plan_block:
+                body_text += "\n\n" + plan_block
 
             # --- Append latest letter from each side (iter 1.4) ---
             # --- 附带双方各最新一封 letter ---

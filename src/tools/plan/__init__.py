@@ -11,4 +11,4 @@ letter_read）都收在 plan 子包下，便于阅读特殊通道的全景。
 ========================================
 """
 
-from .core import plan_create, letter_write, letter_read  # noqa: F401
+from .core import plan_create, plan_read, letter_write, letter_read  # noqa: F401
